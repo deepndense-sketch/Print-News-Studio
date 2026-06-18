@@ -484,7 +484,16 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json = {};
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    const message = normalizeWhitespace(text) || "The app returned unreadable data.";
+    throw new Error(message === "Not found"
+      ? "Close Print News Studio and open it again, then try this button once more."
+      : message);
+  }
   if (!res.ok) throw new Error(json.error || "Request failed.");
   return json;
 }

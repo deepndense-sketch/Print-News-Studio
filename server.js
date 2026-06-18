@@ -506,6 +506,11 @@ function saveMissingLogos(payload) {
 }
 
 async function routeApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/version") {
+    sendJson(res, 200, { version: APP_VERSION });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/update-check") {
     sendJson(res, 200, await checkForUpdate());
     return true;
