@@ -1,0 +1,9 @@
+data/exports/
+data/settings.json
+data/missing_logos.txt
+.test-export/
+*.out
+*.err
+node_modules/
+runtime/
+PrintNewsStudio.exe

@@ -1,0 +1,12 @@
+{
+  "name": "print-news-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local browser app for pasting Excel news rows, managing source logos, editing highlights, and exporting clean news layouts.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

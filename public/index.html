@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print News Studio</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Local browser tool</p>
+        <h1>Print News Studio</h1>
+      </div>
+      <div class="top-actions">
+        <button id="saveDraftBtn" class="ghost" title="Save this working draft in the browser">Save Draft</button>
+        <button id="loadDraftBtn" class="ghost" title="Load last browser draft">Load Draft</button>
+        <button id="clearBtn" class="danger" title="Clear the current screen">Clear</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="workspace">
+        <div class="top-grid">
+        <section class="panel paste-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Paste 4 columns</h2>
+            </div>
+          </div>
+          <textarea id="excelPaste" spellcheck="false" placeholder="Date	Number	Title	Link"></textarea>
+          <div class="paste-actions">
+            <button id="parseBtn" class="primary">Create News Sections</button>
+            <button id="sampleBtn" class="ghost">Try Sample</button>
+            <p id="parseStatus" class="status"></p>
+          </div>
+        </section>
+
+        <section class="panel preview-controls">
+          <div class="panel-head">
+            <div>
+              <h2>Preview and export</h2>
+            </div>
+          </div>
+          <label class="checkline">
+            <input id="roundCorners" type="checkbox">
+            Rounded PNG corners
+          </label>
+          <label class="folder-label">
+            Location folder
+            <div class="folder-row">
+              <input id="exportFolderInput" type="text" placeholder="data\exports">
+              <button id="saveExportFolderBtn" class="ghost" type="button">Save Folder</button>
+              <button id="openExportFolderBtn" class="ghost" type="button">Open Folder</button>
+            </div>
+          </label>
+          <div class="export-actions">
+            <button id="saveExportBtn" class="primary">Save Export</button>
+            <button id="pngExportBtn" class="primary">Render PNG List</button>
+            <button id="zipExportBtn" class="primary">Render ZIP</button>
+          </div>
+          <p id="exportStatus" class="status"></p>
+        </section>
+        </div>
+
+        <section class="panel editor-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Edit news list</h2>
+              <p class="section-note">Edit your news: If you bold text it will auto highlight, give // to separate Aulacese text.</p>
+            </div>
+            <label class="color-picker">
+              News color
+              <select id="newsColorMode">
+                <option value="white" selected>All white</option>
+                <option value="grey">Light grey</option>
+                <option value="cream">Cream</option>
+                <option value="white-cream">White + cream</option>
+                <option value="white-grey">White + light grey</option>
+                <option value="random">Random</option>
+              </select>
+            </label>
+          </div>
+          <div id="itemsEmpty" class="empty-state">Paste Excel rows to create news sections.</div>
+          <div id="itemsList" class="items-list"></div>
+        </section>
+      </section>
+      <div id="previewList" hidden></div>
+    </main>
+
+    <template id="itemTemplate">
+      <article class="news-card">
+        <div class="number-badge"></div>
+        <div class="card-fields">
+          <div class="title-input" contenteditable="true" data-placeholder="Title"></div>
+          <div class="meta-line">
+            <input class="date-input" type="text" placeholder="Date">
+            <div class="link-line">
+              <input class="link-input" type="text" placeholder="Link">
+              <button class="open-link" title="Open link">Open Link</button>
+            </div>
+          </div>
+        </div>
+        <div class="logo-drop" tabindex="0" title="Paste a source logo here">
+          <img alt="">
+          <span>Paste logo</span>
+          <a class="search-logo" target="_blank" rel="noopener">Search Logo</a>
+          <strong class="logo-source"></strong>
+          <div class="logo-position">
+            <span></span>
+            <button class="logo-nudge" data-dx="0" data-dy="-4" title="Move logo up">&uarr;</button>
+            <span></span>
+            <button class="logo-nudge" data-dx="-4" data-dy="0" title="Move logo left">&larr;</button>
+            <button class="logo-reset" title="Reset logo position">Reset</button>
+            <button class="logo-nudge" data-dx="4" data-dy="0" title="Move logo right">&rarr;</button>
+            <button class="logo-size" data-scale="-0.08" title="Make logo smaller">-</button>
+            <button class="logo-nudge" data-dx="0" data-dy="4" title="Move logo down">&darr;</button>
+            <button class="logo-size" data-scale="0.08" title="Make logo bigger">+</button>
+          </div>
+        </div>
+        <div class="item-preview" aria-label="News preview"></div>
+        <button class="remove-item" title="Remove this news section">X</button>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
