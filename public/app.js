@@ -17,6 +17,8 @@ const els = {
   itemsList: document.querySelector("#itemsList"),
   previewList: document.querySelector("#previewList"),
   itemTemplate: document.querySelector("#itemTemplate"),
+  updateBtn: document.querySelector("#updateBtn"),
+  updateStatus: document.querySelector("#updateStatus"),
   saveDraftBtn: document.querySelector("#saveDraftBtn"),
   loadDraftBtn: document.querySelector("#loadDraftBtn"),
   clearBtn: document.querySelector("#clearBtn"),
@@ -521,6 +523,28 @@ function savedFileHtml(file) {
     return `<a href="${file.url}" target="_blank">${escapeHtml(file.name)}</a>`;
   }
   return `<span class="saved-file">${escapeHtml(file.name)}</span>`;
+}
+
+async function checkForUpdate() {
+  els.updateBtn.disabled = true;
+  els.updateStatus.textContent = "Checking update...";
+  try {
+    const result = await api("/api/update-check");
+    if (result.error) {
+      els.updateStatus.textContent = `Version ${result.currentVersion}. Could not check update.`;
+      return;
+    }
+    if (result.updateAvailable) {
+      const url = result.downloadUrl || result.pageUrl;
+      els.updateStatus.innerHTML = `New version ${escapeHtml(result.latestVersion)} available. <a href="${escapeHtml(url)}" target="_blank" rel="noopener">Download</a>`;
+      return;
+    }
+    els.updateStatus.textContent = `Version ${result.currentVersion} is current.`;
+  } catch (error) {
+    els.updateStatus.textContent = error.message;
+  } finally {
+    els.updateBtn.disabled = false;
+  }
 }
 
 async function loadLogos() {
@@ -1191,6 +1215,7 @@ async function renderPngZip() {
 }
 
 els.parseBtn.addEventListener("click", createItemsFromPaste);
+els.updateBtn.addEventListener("click", checkForUpdate);
 els.sampleBtn.addEventListener("click", () => {
   els.excelPaste.value = sampleText();
   createItemsFromPaste();

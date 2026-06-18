@@ -1,8 +1,10 @@
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
+const packageInfo = require("./package.json");
 
 const PORT = Number(process.env.PORT || 4862);
 const ROOT = __dirname;
@@ -11,6 +13,8 @@ const DATA_DIR = path.join(ROOT, "data");
 const LOGO_DIR = path.join(DATA_DIR, "logos");
 const EXPORT_DIR = path.join(DATA_DIR, "exports");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+const APP_VERSION = packageInfo.version || "0.0.0";
+const UPDATE_INFO_URL = "https://raw.githubusercontent.com/deepndense-sketch/Print-News-Studio/main/update.json";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -156,6 +160,86 @@ function openFolderInExplorer(folder) {
       else resolve();
     });
   });
+}
+
+function compareVersions(a, b) {
+  const left = String(a || "0").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
+  const right = String(b || "0").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (left[index] || 0) - (right[index] || 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function fetchJson(url, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": `PrintNewsStudio/${APP_VERSION}`
+      }
+    }, (res) => {
+      const status = res.statusCode || 0;
+      if (status >= 300 && status < 400 && res.headers.location && redirects < 3) {
+        res.resume();
+        resolve(fetchJson(new URL(res.headers.location, url).toString(), redirects + 1));
+        return;
+      }
+
+      if (status !== 200) {
+        res.resume();
+        reject(new Error(`Update check failed (${status}).`));
+        return;
+      }
+
+      let size = 0;
+      const chunks = [];
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > 1024 * 1024) {
+          req.destroy(new Error("Update response is too large."));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch {
+          reject(new Error("Update response is not valid JSON."));
+        }
+      });
+    });
+    req.setTimeout(7000, () => req.destroy(new Error("Update check timed out.")));
+    req.on("error", reject);
+  });
+}
+
+async function checkForUpdate() {
+  try {
+    const info = await fetchJson(UPDATE_INFO_URL);
+    const latestVersion = String(info.version || "").replace(/^v/i, "") || APP_VERSION;
+    return {
+      currentVersion: APP_VERSION,
+      latestVersion,
+      updateAvailable: compareVersions(latestVersion, APP_VERSION) > 0,
+      downloadUrl: String(info.downloadUrl || ""),
+      pageUrl: String(info.pageUrl || ""),
+      notes: String(info.notes || "")
+    };
+  } catch (error) {
+    return {
+      currentVersion: APP_VERSION,
+      latestVersion: "",
+      updateAvailable: false,
+      downloadUrl: "",
+      pageUrl: "",
+      notes: "",
+      error: error.message || "Could not check updates."
+    };
+  }
 }
 
 function readBody(req, limit = 25 * 1024 * 1024) {
@@ -422,6 +506,11 @@ function saveMissingLogos(payload) {
 }
 
 async function routeApi(req, res, url) {
+  if (req.method === "GET" && url.pathname === "/api/update-check") {
+    sendJson(res, 200, await checkForUpdate());
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/settings") {
     sendJson(res, 200, settingsResponse());
     return true;

@@ -94,7 +94,8 @@ textarea:focus,
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -142,6 +143,14 @@ h2 {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.update-status {
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-width: 100%;
+  margin-top: -12px;
+  text-align: right;
 }
 
 .shell {
@@ -683,6 +692,13 @@ h2 {
 
   .topbar {
     position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .update-status {
+    justify-self: start;
+    margin-top: -6px;
+    text-align: left;
   }
 
   .shell {

@@ -42,3 +42,9 @@ http://localhost:4862
 
 - Logos: `data\logos`
 - Exports: the folder shown in the app under Preview and export. By default it is `data\exports` inside the app folder.
+
+## Updates
+
+The app has a Check Update button. It reads `update.json` from this GitHub repo and opens the portable ZIP download link when the version is newer.
+
+For a new release, rebuild `PrintNewsStudio Portable.zip`, replace the ZIP in the repo, and update the version in both `package.json` and `update.json`.
