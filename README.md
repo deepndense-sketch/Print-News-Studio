@@ -40,7 +40,7 @@ http://localhost:4862
 
 ## Fonts
 
-Copy headline font files into the font folder shown in the app, then reopen or save the folder path again. By default it is `data\fonts`, but users can type any folder path in the Fonts line. Supported font files are `.ttf`, `.otf`, `.woff`, and `.woff2`.
+Copy headline font files into the font folder shown in the app, then reopen or save the folder path again. By default it is `data\fonts`, but users can click Choose or type any folder path in the Fonts line. Supported font files are `.ttf`, `.otf`, `.woff`, and `.woff2`.
 
 The edit section has two headline font choices:
 

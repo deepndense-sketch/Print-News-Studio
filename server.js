@@ -192,6 +192,39 @@ function openFolderInExplorer(folder) {
   });
 }
 
+function chooseFolderInWindows(startFolder) {
+  const script = [
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+    "$dialog.Description = 'Choose headline font folder'",
+    "$dialog.ShowNewFolderButton = $true",
+    "$start = $env:PRINT_NEWS_START_FOLDER",
+    "if ($start -and (Test-Path -LiteralPath $start)) { $dialog.SelectedPath = $start }",
+    "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }"
+  ].join("; ");
+
+  return new Promise((resolve, reject) => {
+    execFile("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script
+    ], {
+      env: { ...process.env, PRINT_NEWS_START_FOLDER: startFolder || "" },
+      windowsHide: false
+    }, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(cleanFolderInput(stdout));
+    });
+  });
+}
+
 function compareVersions(a, b) {
   const left = String(a || "0").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
   const right = String(b || "0").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
@@ -599,6 +632,18 @@ async function routeApi(req, res, url) {
     const fontFolder = currentFontFolder();
     await openFolderInExplorer(fontFolder);
     sendJson(res, 200, { fontFolder });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/choose-font-folder") {
+    const body = JSON.parse(await readBody(req));
+    const requestedFolder = resolveFontFolder(body.fontFolder);
+    const chosenFolder = await chooseFolderInWindows(requestedFolder);
+    if (!chosenFolder) {
+      sendJson(res, 200, { ...settingsResponse(), canceled: true });
+      return true;
+    }
+    sendJson(res, 200, saveSettings({ fontFolder: chosenFolder }));
     return true;
   }
 

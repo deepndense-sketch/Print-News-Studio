@@ -32,6 +32,7 @@ const els = {
   aulaceseFontSelect: document.querySelector("#aulaceseFontSelect"),
   englishFontSelect: document.querySelector("#englishFontSelect"),
   fontFolderInput: document.querySelector("#fontFolderInput"),
+  chooseFontFolderBtn: document.querySelector("#chooseFontFolderBtn"),
   saveFontFolderBtn: document.querySelector("#saveFontFolderBtn"),
   openFontFolderBtn: document.querySelector("#openFontFolderBtn"),
   pngExportBtn: document.querySelector("#pngExportBtn"),
@@ -594,9 +595,9 @@ async function saveFontFolder(silent = false) {
     body: JSON.stringify({ fontFolder: els.fontFolderInput.value })
   });
   setFontFolderUi(settings);
-  await loadFonts();
+  const count = await loadFonts();
   if (!silent) {
-    els.parseStatus.textContent = `Font folder saved: ${settings.fontFolder}`;
+    els.parseStatus.textContent = `Font folder saved: ${settings.fontFolder}. ${count} fonts found.`;
   }
   return settings;
 }
@@ -611,22 +612,24 @@ function savedFileHtml(file) {
 async function loadFonts() {
   const data = await api("/api/fonts");
   setFontFolderUi(data);
-  const loadedFonts = [];
-
-  for (const font of data.fonts || []) {
-    try {
-      const face = new FontFace(font.family, `url("${font.url}")`);
-      await face.load();
-      document.fonts.add(face);
-      loadedFonts.push(font);
-    } catch {
-      // Skip unreadable font files so one bad file does not break export.
-    }
-  }
-
-  state.fonts = loadedFonts;
+  state.fonts = Array.isArray(data.fonts) ? data.fonts : [];
+  applyFontFaceStyles();
   renderFontOptions();
   render();
+  return state.fonts.length;
+}
+
+function applyFontFaceStyles() {
+  let style = document.querySelector("#dynamicFontFaces");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "dynamicFontFaces";
+    document.head.appendChild(style);
+  }
+
+  style.textContent = state.fonts
+    .map((font) => `@font-face { font-family: "${font.family}"; src: url("${font.url}"); font-weight: 400 900; }`)
+    .join("\n");
 }
 
 function fontOptionHtml(font) {
@@ -653,6 +656,18 @@ async function openFontFolder() {
   const settings = await saveFontFolder(true);
   const result = await api("/api/open-font-folder", { method: "POST", body: "{}" });
   els.parseStatus.textContent = `Font folder opened: ${result.fontFolder || settings.fontFolder}`;
+}
+
+async function chooseFontFolder() {
+  const result = await api("/api/choose-font-folder", {
+    method: "POST",
+    body: JSON.stringify({ fontFolder: els.fontFolderInput.value })
+  });
+  setFontFolderUi(result);
+  const count = await loadFonts();
+  els.parseStatus.textContent = result.canceled
+    ? `Font folder unchanged: ${result.fontFolder}. ${count} fonts found.`
+    : `Font folder selected: ${result.fontFolder}. ${count} fonts found.`;
 }
 
 async function checkForUpdate() {
@@ -1280,11 +1295,33 @@ async function renderItemPng(item, index) {
   };
 }
 
-async function renderCurrentImages() {
-  commitVisibleItems();
-  if (document.fonts?.ready) {
+async function ensureHeadlineFontsReady() {
+  if (!document.fonts?.load) return;
+
+  const keys = new Set();
+  state.items.forEach((item, index) => {
+    const key = headlineFontKey(item, index);
+    if (key) keys.add(key);
+  });
+
+  await Promise.all([...keys].map(async (key) => {
+    const font = fontByKey(key);
+    if (!font) return;
+    try {
+      await document.fonts.load(`700 48px "${font.family}"`);
+    } catch {
+      // Keep exporting with fallback if a copied font file is unreadable.
+    }
+  }));
+
+  if (document.fonts.ready) {
     await document.fonts.ready;
   }
+}
+
+async function renderCurrentImages() {
+  commitVisibleItems();
+  await ensureHeadlineFontsReady();
   const images = [];
   for (let index = 0; index < state.items.length; index += 1) {
     images.push(await renderItemPng(state.items[index], index));
@@ -1394,6 +1431,11 @@ els.englishFontSelect.addEventListener("change", () => {
   }
   render();
 });
+els.chooseFontFolderBtn.addEventListener("click", () => {
+  chooseFontFolder().catch((error) => {
+    els.parseStatus.textContent = error.message;
+  });
+});
 els.saveFontFolderBtn.addEventListener("click", () => {
   saveFontFolder().catch((error) => {
     els.parseStatus.textContent = error.message;
@@ -1409,9 +1451,15 @@ loadSettings().catch((error) => {
   els.exportStatus.textContent = error.message;
 });
 
-loadFonts().catch((error) => {
-  els.parseStatus.textContent = error.message;
-});
+loadFonts()
+  .then((count) => {
+    if (!count) {
+      els.parseStatus.textContent = "No headline fonts found. Click Choose or copy font files into the font folder.";
+    }
+  })
+  .catch((error) => {
+    els.parseStatus.textContent = error.message;
+  });
 
 loadLogos().catch((error) => {
   els.parseStatus.textContent = error.message;
