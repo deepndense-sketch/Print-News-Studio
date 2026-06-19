@@ -10,6 +10,8 @@ For the portable release, unzip `PrintNewsStudio Portable.zip` and double-click:
 PrintNewsStudio.exe
 ```
 
+After Extract All, `PrintNewsStudio.exe`, `public`, `data`, and `runtime` should be in the same folder.
+
 For local development, double-click:
 
 ```text

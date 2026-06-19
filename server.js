@@ -6,7 +6,8 @@ const crypto = require("crypto");
 const { execFile } = require("child_process");
 const packageInfo = require("./package.json");
 
-const PORT = Number(process.env.PORT || 4862);
+const portArg = process.argv.find((arg) => /^--port=\d+$/i.test(arg));
+const PORT = Number(portArg ? portArg.split("=")[1] : process.env.PORT || 4862);
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");

@@ -9,3 +9,4 @@ data/fonts/*
 node_modules/
 runtime/
 PrintNewsStudio.exe
+*.exe.test
