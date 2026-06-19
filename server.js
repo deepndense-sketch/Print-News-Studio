@@ -590,7 +590,7 @@ function saveMissingLogos(payload) {
 
 async function routeApi(req, res, url) {
   if (req.method === "GET" && url.pathname === "/api/version") {
-    sendJson(res, 200, { version: APP_VERSION });
+    sendJson(res, 200, { app: "PrintNewsStudio", version: APP_VERSION });
     return true;
   }
 

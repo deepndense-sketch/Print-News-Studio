@@ -28,6 +28,8 @@ Open:
 http://localhost:4862
 ```
 
+The portable launcher starts at port `4862`. If that port is already busy on a user's computer, it automatically tries the next open local port and opens that address.
+
 ## Main Workflow
 
 1. Copy rows from Excel.
