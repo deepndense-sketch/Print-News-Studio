@@ -1,0 +1,10 @@
+Copy font files here, then reopen Print News Studio.
+
+Supported font files:
+- .ttf
+- .otf
+- .woff
+- .woff2
+
+The app uses these fonts only for news headlines.
+Date and source text keep the normal app font.

@@ -346,6 +346,46 @@ h2 {
   padding: 0 8px;
 }
 
+.font-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.font-picker label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.font-picker select {
+  width: 136px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 8px;
+}
+
+.font-picker button {
+  min-height: 32px;
+  padding: 0 9px;
+}
+
+.font-folder-path {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .number-badge {
   display: grid;
   place-items: center;
@@ -724,6 +764,15 @@ h2 {
 
   .folder-row {
     grid-template-columns: 1fr;
+  }
+
+  .font-picker {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .font-picker select {
+    width: min(170px, 100%);
   }
 
   .meta-line {

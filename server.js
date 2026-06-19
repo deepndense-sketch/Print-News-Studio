@@ -11,6 +11,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
 const LOGO_DIR = path.join(DATA_DIR, "logos");
+const FONT_DIR = path.join(DATA_DIR, "fonts");
 const EXPORT_DIR = path.join(DATA_DIR, "exports");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const APP_VERSION = packageInfo.version || "0.0.0";
@@ -32,11 +33,15 @@ const MIME = {
   ".ico": "image/x-icon",
   ".tif": "image/tiff",
   ".tiff": "image/tiff",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
   ".zip": "application/zip"
 };
 
 function ensureFolders() {
-  for (const dir of [DATA_DIR, LOGO_DIR, EXPORT_DIR]) {
+  for (const dir of [DATA_DIR, LOGO_DIR, FONT_DIR, EXPORT_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -409,6 +414,25 @@ function listLogos() {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
+function listFonts() {
+  ensureFolders();
+  return fs.readdirSync(FONT_DIR)
+    .filter((file) => /\.(ttf|otf|woff2?)$/i.test(file))
+    .map((file) => {
+      const parsed = path.parse(file);
+      const stat = fs.statSync(path.join(FONT_DIR, file));
+      const family = `PrintNewsStudioFont_${crypto.createHash("sha1").update(file).digest("hex").slice(0, 12)}`;
+      return {
+        key: parsed.name,
+        file,
+        family,
+        url: `/fonts/${encodeURIComponent(file)}`,
+        updatedAt: stat.mtime.toISOString()
+      };
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
 function exportDocument(payload) {
   ensureFolders();
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -534,6 +558,21 @@ async function routeApi(req, res, url) {
     return true;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/fonts") {
+    sendJson(res, 200, {
+      fonts: listFonts(),
+      fontFolder: FONT_DIR
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/open-font-folder") {
+    ensureFolders();
+    await openFolderInExplorer(FONT_DIR);
+    sendJson(res, 200, { fontFolder: FONT_DIR });
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/logos") {
     sendJson(res, 200, { logos: listLogos() });
     return true;
@@ -619,6 +658,11 @@ function createServer() {
 
       if (url.pathname.startsWith("/logos/")) {
         serveFile(res, LOGO_DIR, decodeURIComponent(url.pathname.replace("/logos/", "")));
+        return;
+      }
+
+      if (url.pathname.startsWith("/fonts/")) {
+        serveFile(res, FONT_DIR, decodeURIComponent(url.pathname.replace("/fonts/", "")));
         return;
       }
 

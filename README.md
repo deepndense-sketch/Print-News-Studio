@@ -38,9 +38,21 @@ http://localhost:4862
 6. Choose the Location folder in Preview and export.
 7. Render the PNG list or ZIP.
 
+## Fonts
+
+Copy headline font files into `data\fonts`, then reopen the app. Supported font files are `.ttf`, `.otf`, `.woff`, and `.woff2`.
+
+The edit section has two headline font choices:
+
+- Aulacese: used for news headlines that contain `//`.
+- English: used for the other headlines. Random picks a font per news item.
+
+Date and source text keep the normal app font.
+
 ## Saved Folders
 
 - Logos: `data\logos`
+- Fonts: `data\fonts`
 - Exports: the folder shown in the app under Preview and export. By default it is `data\exports` inside the app folder.
 
 ## Updates

@@ -1,6 +1,8 @@
 const state = {
   items: [],
   logos: new Map(),
+  fonts: [],
+  fontFolder: "",
   settings: {
     exportFolder: "",
     exportFolderInput: "",
@@ -27,6 +29,10 @@ const els = {
   saveExportFolderBtn: document.querySelector("#saveExportFolderBtn"),
   openExportFolderBtn: document.querySelector("#openExportFolderBtn"),
   newsColorMode: document.querySelector("#newsColorMode"),
+  aulaceseFontSelect: document.querySelector("#aulaceseFontSelect"),
+  englishFontSelect: document.querySelector("#englishFontSelect"),
+  openFontFolderBtn: document.querySelector("#openFontFolderBtn"),
+  fontFolderPath: document.querySelector("#fontFolderPath"),
   saveExportBtn: document.querySelector("#saveExportBtn"),
   pngExportBtn: document.querySelector("#pngExportBtn"),
   zipExportBtn: document.querySelector("#zipExportBtn"),
@@ -75,6 +81,54 @@ function newsColorKey(item, index) {
 
 function newsBackground(item, index) {
   return NEWS_COLOR_VALUES[newsColorKey(item, index)] || NEWS_COLOR_VALUES.white;
+}
+
+function aulaceseFontKey() {
+  return els.aulaceseFontSelect?.value || "";
+}
+
+function englishFontKey() {
+  return els.englishFontSelect?.value || "random";
+}
+
+function fontByKey(key) {
+  return state.fonts.find((font) => font.key === key) || null;
+}
+
+function isAulaceseItem(item) {
+  return /\/\//.test(titleHtml(item));
+}
+
+function fallbackHeadlineStack() {
+  return 'Georgia, "Times New Roman", serif';
+}
+
+function fontStackForKey(key) {
+  const font = fontByKey(key);
+  return font ? `${font.family}, ${fallbackHeadlineStack()}` : fallbackHeadlineStack();
+}
+
+function chooseRandomEnglishFont(item) {
+  if (!state.fonts.length) return "";
+  const available = new Set(state.fonts.map((font) => font.key));
+  if (!item.randomEnglishFontKey || !available.has(item.randomEnglishFontKey)) {
+    item.randomEnglishFontKey = state.fonts[Math.floor(Math.random() * state.fonts.length)].key;
+  }
+  return item.randomEnglishFontKey;
+}
+
+function headlineFontKey(item, index) {
+  if (isAulaceseItem(item)) {
+    return aulaceseFontKey();
+  }
+
+  const selected = englishFontKey();
+  if (selected === "random") return chooseRandomEnglishFont(item);
+  return selected;
+}
+
+function headlineFontStack(item, index) {
+  return fontStackForKey(headlineFontKey(item, index));
 }
 
 function slug(value) {
@@ -534,6 +588,56 @@ function savedFileHtml(file) {
   return `<span class="saved-file">${escapeHtml(file.name)}</span>`;
 }
 
+async function loadFonts() {
+  const data = await api("/api/fonts");
+  state.fontFolder = data.fontFolder || "";
+  const loadedFonts = [];
+
+  for (const font of data.fonts || []) {
+    try {
+      const face = new FontFace(font.family, `url("${font.url}")`);
+      await face.load();
+      document.fonts.add(face);
+      loadedFonts.push(font);
+    } catch {
+      // Skip unreadable font files so one bad file does not break export.
+    }
+  }
+
+  state.fonts = loadedFonts;
+  renderFontOptions();
+  render();
+}
+
+function fontOptionHtml(font) {
+  return `<option value="${escapeHtml(font.key)}">${escapeHtml(font.key)}</option>`;
+}
+
+function setSelectValue(select, value, fallback) {
+  const values = [...select.options].map((option) => option.value);
+  select.value = values.includes(value) ? value : fallback;
+}
+
+function renderFontOptions() {
+  const currentAulacese = aulaceseFontKey();
+  const currentEnglish = englishFontKey();
+  const fontOptions = state.fonts.map(fontOptionHtml).join("");
+
+  els.aulaceseFontSelect.innerHTML = `<option value="">Default</option>${fontOptions}`;
+  els.englishFontSelect.innerHTML = `<option value="random">Random</option><option value="">Default</option>${fontOptions}`;
+  setSelectValue(els.aulaceseFontSelect, currentAulacese, "");
+  setSelectValue(els.englishFontSelect, currentEnglish, "random");
+
+  const folder = state.fontFolder || "data\\fonts";
+  els.fontFolderPath.textContent = `Folder: ${folder}`;
+  els.fontFolderPath.title = folder;
+}
+
+async function openFontFolder() {
+  const result = await api("/api/open-font-folder", { method: "POST", body: "{}" });
+  els.parseStatus.textContent = `Font folder opened: ${result.fontFolder}`;
+}
+
 async function checkForUpdate() {
   els.updateBtn.disabled = true;
   els.updateStatus.textContent = "Checking update...";
@@ -763,12 +867,12 @@ function renderItemPreviewHtml(item, index) {
         <div class="preview-logo ${logo ? "has-logo" : "missing"}" title="${escapeHtml(label)}">
           ${logoHtml}
         </div>
-        <div class="preview-date-source">
+      <div class="preview-date-source">
           <span class="preview-date">${escapeHtml(formatDisplayDate(item.date) || "Date")}</span>
           <span class="preview-source"> | ${escapeHtml(source)}</span>
         </div>
       </div>
-      <h3 class="preview-title">${renderTitleHtml(item) || "Untitled headline"}</h3>
+      <h3 class="preview-title" style="font-family: ${escapeHtml(headlineFontStack(item, index))}">${renderTitleHtml(item) || "Untitled headline"}</h3>
     </article>
   `;
 }
@@ -845,6 +949,9 @@ function collectExportHtml() {
       }
     })
     .join("\n");
+  const fontFaceStyles = state.fonts
+    .map((font) => `@font-face { font-family: ${font.family}; src: url("${font.url}"); }`)
+    .join("\n");
 
   return `<!doctype html>
 <html lang="en">
@@ -852,7 +959,7 @@ function collectExportHtml() {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>News Export</title>
-  <style>${styles}</style>
+  <style>${fontFaceStyles}\n${styles}</style>
 </head>
 <body>
   <main class="preview-sheet">${state.items.map((item, index) => renderItemPreviewHtml(item, index)).join("")}</main>
@@ -875,7 +982,9 @@ function saveDraft() {
   localStorage.setItem(DRAFT_KEY, JSON.stringify({
     items: state.items,
     roundCorners: els.roundCorners.checked,
-    newsColorMode: newsColorMode()
+    newsColorMode: newsColorMode(),
+    aulaceseFontKey: aulaceseFontKey(),
+    englishFontKey: englishFontKey()
   }));
   els.parseStatus.textContent = "Draft saved in this browser.";
 }
@@ -889,6 +998,8 @@ function loadDraft() {
   const draft = JSON.parse(raw);
   els.roundCorners.checked = Boolean(draft.roundCorners);
   els.newsColorMode.value = draft.newsColorMode || "white";
+  setSelectValue(els.aulaceseFontSelect, draft.aulaceseFontKey || "", "");
+  setSelectValue(els.englishFontSelect, draft.englishFontKey || "random", "random");
   state.items = Array.isArray(draft.items) ? draft.items : [];
   if (newsColorMode() === "random") {
     state.items.forEach((item, index) => {
@@ -968,21 +1079,21 @@ function headlineSegments(item) {
   return segments;
 }
 
-function headlineFont() {
-  return "700 48px Georgia, 'Times New Roman', serif";
+function headlineFont(item, index) {
+  return `700 48px ${headlineFontStack(item, index)}`;
 }
 
-function measureHeadlinePart(ctx, text) {
-  ctx.font = headlineFont();
+function measureHeadlinePart(ctx, text, item, index) {
+  ctx.font = headlineFont(item, index);
   return ctx.measureText(text).width;
 }
 
-function wrapHeadlineSegments(ctx, segments, maxWidth) {
+function wrapHeadlineSegments(ctx, segments, maxWidth, item, index) {
   const lines = [];
   let tokens = [];
   for (const segment of segments) {
     if (segment.break) {
-      if (tokens.length) lines.push(wrapHeadlineTokens(ctx, tokens, maxWidth));
+      if (tokens.length) lines.push(wrapHeadlineTokens(ctx, tokens, maxWidth, item, index));
       else lines.push([[{ text: "", bold: false }]]);
       tokens = [];
       continue;
@@ -991,23 +1102,23 @@ function wrapHeadlineSegments(ctx, segments, maxWidth) {
       tokens.push({ text: word, bold: segment.bold });
     });
   }
-  if (tokens.length) lines.push(wrapHeadlineTokens(ctx, tokens, maxWidth));
+  if (tokens.length) lines.push(wrapHeadlineTokens(ctx, tokens, maxWidth, item, index));
   const flat = lines.flat();
   return flat.length ? flat : [[{ text: "Untitled headline", bold: false }]];
 }
 
-function wrapHeadlineTokens(ctx, tokens, maxWidth) {
+function wrapHeadlineTokens(ctx, tokens, maxWidth, item, index) {
   const lines = [];
   let line = [];
   let width = 0;
 
   for (const token of tokens) {
     const text = line.length ? ` ${token.text}` : token.text;
-    const partWidth = measureHeadlinePart(ctx, text);
+    const partWidth = measureHeadlinePart(ctx, text, item, index);
     if (line.length && width + partWidth > maxWidth) {
       lines.push(line);
       line = [{ ...token, text: token.text }];
-      width = measureHeadlinePart(ctx, token.text);
+      width = measureHeadlinePart(ctx, token.text, item, index);
     } else {
       line.push({ ...token, text });
       width += partWidth;
@@ -1018,17 +1129,17 @@ function wrapHeadlineTokens(ctx, tokens, maxWidth) {
   return lines.length ? lines : [[{ text: "Untitled headline", bold: false }]];
 }
 
-function headlineLineWidth(ctx, line) {
-  return line.reduce((total, part) => total + measureHeadlinePart(ctx, part.text), 0);
+function headlineLineWidth(ctx, line, item, index) {
+  return line.reduce((total, part) => total + measureHeadlinePart(ctx, part.text, item, index), 0);
 }
 
-function drawHeadlineLines(ctx, lines, x, y) {
+function drawHeadlineLines(ctx, lines, x, y, item, index) {
   ctx.textBaseline = "top";
-  ctx.font = headlineFont();
+  ctx.font = headlineFont(item, index);
   for (const line of lines) {
     let xText = x;
     for (const part of line) {
-      const width = measureHeadlinePart(ctx, part.text);
+      const width = measureHeadlinePart(ctx, part.text, item, index);
       if (part.bold) {
         ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
         drawRoundRect(ctx, xText - 4, y - 3, width + 8, 56, 4);
@@ -1103,12 +1214,12 @@ async function renderItemPng(item, index) {
   let wrapWidth = 800;
   let lines = [];
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    lines = wrapHeadlineSegments(ctx, segments, wrapWidth - 40);
+    lines = wrapHeadlineSegments(ctx, segments, wrapWidth - 40, item, index);
     if (lines.length <= 2 || wrapWidth >= 1500) break;
     wrapWidth += 50;
   }
 
-  const maxLineWidth = Math.max(...lines.map((line) => headlineLineWidth(ctx, line)));
+  const maxLineWidth = Math.max(...lines.map((line) => headlineLineWidth(ctx, line, item, index)));
   ctx.font = "24px Arial, Helvetica, sans-serif";
   const dateWidth = ctx.measureText(item.date || "Date").width;
   ctx.font = "20px Arial, Helvetica, sans-serif";
@@ -1143,7 +1254,7 @@ async function renderItemPng(item, index) {
   ctx.font = "20px Arial, Helvetica, sans-serif";
   ctx.fillText(` | ${source}`, dx + dw + 10, dy + 2);
 
-  drawHeadlineLines(ctx, lines, 20, 100);
+  drawHeadlineLines(ctx, lines, 20, 100, item, index);
   const outputCanvas = els.roundCorners.checked ? roundedCanvasCopy(canvas, 0.05) : canvas;
 
   return {
@@ -1154,6 +1265,9 @@ async function renderItemPng(item, index) {
 
 async function renderCurrentImages() {
   commitVisibleItems();
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
   const images = [];
   for (let index = 0; index < state.items.length; index += 1) {
     images.push(await renderItemPng(state.items[index], index));
@@ -1270,9 +1384,27 @@ els.newsColorMode.addEventListener("change", () => {
   if (newsColorMode() === "random") assignRandomNewsColors();
   render();
 });
+els.aulaceseFontSelect.addEventListener("change", render);
+els.englishFontSelect.addEventListener("change", () => {
+  if (englishFontKey() === "random") {
+    state.items.forEach((item) => {
+      delete item.randomEnglishFontKey;
+    });
+  }
+  render();
+});
+els.openFontFolderBtn.addEventListener("click", () => {
+  openFontFolder().catch((error) => {
+    els.parseStatus.textContent = error.message;
+  });
+});
 
 loadSettings().catch((error) => {
   els.exportStatus.textContent = error.message;
+});
+
+loadFonts().catch((error) => {
+  els.parseStatus.textContent = error.message;
 });
 
 loadLogos().catch((error) => {
