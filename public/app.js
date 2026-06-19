@@ -31,9 +31,9 @@ const els = {
   newsColorMode: document.querySelector("#newsColorMode"),
   aulaceseFontSelect: document.querySelector("#aulaceseFontSelect"),
   englishFontSelect: document.querySelector("#englishFontSelect"),
+  fontFolderInput: document.querySelector("#fontFolderInput"),
+  saveFontFolderBtn: document.querySelector("#saveFontFolderBtn"),
   openFontFolderBtn: document.querySelector("#openFontFolderBtn"),
-  fontFolderPath: document.querySelector("#fontFolderPath"),
-  saveExportBtn: document.querySelector("#saveExportBtn"),
   pngExportBtn: document.querySelector("#pngExportBtn"),
   zipExportBtn: document.querySelector("#zipExportBtn"),
   exportStatus: document.querySelector("#exportStatus")
@@ -558,9 +558,16 @@ function setExportFolderUi(settings) {
   els.exportFolderInput.title = settings.exportFolder || "";
 }
 
+function setFontFolderUi(settings) {
+  state.fontFolder = settings.fontFolder || "";
+  els.fontFolderInput.value = settings.fontFolderInput || settings.fontFolder || "";
+  els.fontFolderInput.title = settings.fontFolder || "";
+}
+
 async function loadSettings() {
   const settings = await api("/api/settings");
   setExportFolderUi(settings);
+  setFontFolderUi(settings);
 }
 
 async function saveExportFolder(silent = false) {
@@ -581,6 +588,19 @@ async function openExportFolder() {
   els.exportStatus.textContent = `Opened folder: ${settings.exportFolder}`;
 }
 
+async function saveFontFolder(silent = false) {
+  const settings = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({ fontFolder: els.fontFolderInput.value })
+  });
+  setFontFolderUi(settings);
+  await loadFonts();
+  if (!silent) {
+    els.parseStatus.textContent = `Font folder saved: ${settings.fontFolder}`;
+  }
+  return settings;
+}
+
 function savedFileHtml(file) {
   if (file.url) {
     return `<a href="${file.url}" target="_blank">${escapeHtml(file.name)}</a>`;
@@ -590,7 +610,7 @@ function savedFileHtml(file) {
 
 async function loadFonts() {
   const data = await api("/api/fonts");
-  state.fontFolder = data.fontFolder || "";
+  setFontFolderUi(data);
   const loadedFonts = [];
 
   for (const font of data.fonts || []) {
@@ -627,15 +647,12 @@ function renderFontOptions() {
   els.englishFontSelect.innerHTML = `<option value="random">Random</option><option value="">Default</option>${fontOptions}`;
   setSelectValue(els.aulaceseFontSelect, currentAulacese, "");
   setSelectValue(els.englishFontSelect, currentEnglish, "random");
-
-  const folder = state.fontFolder || "data\\fonts";
-  els.fontFolderPath.textContent = `Folder: ${folder}`;
-  els.fontFolderPath.title = folder;
 }
 
 async function openFontFolder() {
+  const settings = await saveFontFolder(true);
   const result = await api("/api/open-font-folder", { method: "POST", body: "{}" });
-  els.parseStatus.textContent = `Font folder opened: ${result.fontFolder}`;
+  els.parseStatus.textContent = `Font folder opened: ${result.fontFolder || settings.fontFolder}`;
 }
 
 async function checkForUpdate() {
@@ -1352,22 +1369,6 @@ els.clearBtn.addEventListener("click", () => {
   els.parseStatus.textContent = "Screen cleared.";
   render();
 });
-els.saveExportBtn.addEventListener("click", async () => {
-  try {
-    commitVisibleItems();
-    const result = await api("/api/export", {
-      method: "POST",
-      body: JSON.stringify({
-        title: "News Export",
-        items: exportItems(),
-        html: collectExportHtml()
-      })
-    });
-    els.exportStatus.innerHTML = `Saved export: <a href="${result.html}" target="_blank">HTML</a> and <a href="${result.json}" target="_blank">JSON</a>`;
-  } catch (error) {
-    els.exportStatus.textContent = error.message;
-  }
-});
 els.saveExportFolderBtn.addEventListener("click", () => {
   saveExportFolder().catch((error) => {
     els.exportStatus.textContent = error.message;
@@ -1392,6 +1393,11 @@ els.englishFontSelect.addEventListener("change", () => {
     });
   }
   render();
+});
+els.saveFontFolderBtn.addEventListener("click", () => {
+  saveFontFolder().catch((error) => {
+    els.parseStatus.textContent = error.message;
+  });
 });
 els.openFontFolderBtn.addEventListener("click", () => {
   openFontFolder().catch((error) => {

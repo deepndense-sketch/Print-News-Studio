@@ -1,4 +1,6 @@
-Copy font files here, then reopen Print News Studio.
+Copy font files here, then reopen Print News Studio or click Save next to the font folder path.
+
+You can also type a different font folder path inside the app.
 
 Supported font files:
 - .ttf

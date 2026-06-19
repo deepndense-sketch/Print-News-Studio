@@ -373,17 +373,18 @@ h2 {
   padding: 0 8px;
 }
 
+.font-folder-input {
+  width: 240px;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .font-picker button {
   min-height: 32px;
   padding: 0 9px;
-}
-
-.font-folder-path {
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .number-badge {
@@ -773,6 +774,10 @@ h2 {
 
   .font-picker select {
     width: min(170px, 100%);
+  }
+
+  .font-folder-input {
+    width: 100%;
   }
 
   .meta-line {

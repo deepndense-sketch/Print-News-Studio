@@ -116,6 +116,11 @@ function resolveExportFolder(value) {
   return input ? path.resolve(ROOT, input) : EXPORT_DIR;
 }
 
+function resolveFontFolder(value) {
+  const input = expandFolderInput(value);
+  return input ? path.resolve(ROOT, input) : FONT_DIR;
+}
+
 function readSettingsRaw() {
   ensureFolders();
   if (!fs.existsSync(SETTINGS_FILE)) return {};
@@ -128,20 +133,34 @@ function readSettingsRaw() {
 
 function settingsResponse(raw = readSettingsRaw()) {
   const exportFolderInput = typeof raw.exportFolder === "string" ? cleanFolderInput(raw.exportFolder) : "";
+  const fontFolderInput = typeof raw.fontFolder === "string" ? cleanFolderInput(raw.fontFolder) : "";
   return {
     exportFolder: resolveExportFolder(exportFolderInput),
     exportFolderInput,
-    defaultExportFolder: EXPORT_DIR
+    defaultExportFolder: EXPORT_DIR,
+    fontFolder: resolveFontFolder(fontFolderInput),
+    fontFolderInput,
+    defaultFontFolder: FONT_DIR
   };
 }
 
 function saveSettings(payload) {
   ensureFolders();
-  const exportFolderInput = cleanFolderInput(payload.exportFolder);
+  const existing = readSettingsRaw();
+  const hasExportFolder = Object.prototype.hasOwnProperty.call(payload, "exportFolder");
+  const hasFontFolder = Object.prototype.hasOwnProperty.call(payload, "fontFolder");
+  const exportFolderInput = cleanFolderInput(hasExportFolder ? payload.exportFolder : existing.exportFolder);
+  const fontFolderInput = cleanFolderInput(hasFontFolder ? payload.fontFolder : existing.fontFolder);
   const exportFolder = resolveExportFolder(exportFolderInput);
+  const fontFolder = resolveFontFolder(fontFolderInput);
   fs.mkdirSync(exportFolder, { recursive: true });
-  const storedInput = path.resolve(exportFolder) === path.resolve(EXPORT_DIR) ? "" : exportFolderInput;
-  const settings = { exportFolder: storedInput };
+  fs.mkdirSync(fontFolder, { recursive: true });
+  const storedExportInput = path.resolve(exportFolder) === path.resolve(EXPORT_DIR) ? "" : exportFolderInput;
+  const storedFontInput = path.resolve(fontFolder) === path.resolve(FONT_DIR) ? "" : fontFolderInput;
+  const settings = {
+    exportFolder: storedExportInput,
+    fontFolder: storedFontInput
+  };
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
   return settingsResponse(settings);
 }
@@ -150,6 +169,12 @@ function currentExportFolder() {
   const settings = settingsResponse();
   fs.mkdirSync(settings.exportFolder, { recursive: true });
   return settings.exportFolder;
+}
+
+function currentFontFolder() {
+  const settings = settingsResponse();
+  fs.mkdirSync(settings.fontFolder, { recursive: true });
+  return settings.fontFolder;
 }
 
 function exportUrlFor(filePath) {
@@ -416,11 +441,12 @@ function listLogos() {
 
 function listFonts() {
   ensureFolders();
-  return fs.readdirSync(FONT_DIR)
+  const fontFolder = currentFontFolder();
+  return fs.readdirSync(fontFolder)
     .filter((file) => /\.(ttf|otf|woff2?)$/i.test(file))
     .map((file) => {
       const parsed = path.parse(file);
-      const stat = fs.statSync(path.join(FONT_DIR, file));
+      const stat = fs.statSync(path.join(fontFolder, file));
       const family = `PrintNewsStudioFont_${crypto.createHash("sha1").update(file).digest("hex").slice(0, 12)}`;
       return {
         key: parsed.name,
@@ -559,17 +585,20 @@ async function routeApi(req, res, url) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/fonts") {
+    const settings = settingsResponse();
     sendJson(res, 200, {
       fonts: listFonts(),
-      fontFolder: FONT_DIR
+      fontFolder: settings.fontFolder,
+      fontFolderInput: settings.fontFolderInput,
+      defaultFontFolder: settings.defaultFontFolder
     });
     return true;
   }
 
   if (req.method === "POST" && url.pathname === "/api/open-font-folder") {
-    ensureFolders();
-    await openFolderInExplorer(FONT_DIR);
-    sendJson(res, 200, { fontFolder: FONT_DIR });
+    const fontFolder = currentFontFolder();
+    await openFolderInExplorer(fontFolder);
+    sendJson(res, 200, { fontFolder });
     return true;
   }
 
@@ -662,7 +691,7 @@ function createServer() {
       }
 
       if (url.pathname.startsWith("/fonts/")) {
-        serveFile(res, FONT_DIR, decodeURIComponent(url.pathname.replace("/fonts/", "")));
+        serveFile(res, currentFontFolder(), decodeURIComponent(url.pathname.replace("/fonts/", "")));
         return;
       }
 

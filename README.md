@@ -40,7 +40,7 @@ http://localhost:4862
 
 ## Fonts
 
-Copy headline font files into `data\fonts`, then reopen the app. Supported font files are `.ttf`, `.otf`, `.woff`, and `.woff2`.
+Copy headline font files into the font folder shown in the app, then reopen or save the folder path again. By default it is `data\fonts`, but users can type any folder path in the Fonts line. Supported font files are `.ttf`, `.otf`, `.woff`, and `.woff2`.
 
 The edit section has two headline font choices:
 
@@ -52,7 +52,7 @@ Date and source text keep the normal app font.
 ## Saved Folders
 
 - Logos: `data\logos`
-- Fonts: `data\fonts`
+- Fonts: the folder shown in the app under Edit news list. By default it is `data\fonts` inside the app folder.
 - Exports: the folder shown in the app under Preview and export. By default it is `data\exports` inside the app folder.
 
 ## Updates
