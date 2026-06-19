@@ -14,6 +14,7 @@ const els = {
   excelPaste: document.querySelector("#excelPaste"),
   parseBtn: document.querySelector("#parseBtn"),
   sampleBtn: document.querySelector("#sampleBtn"),
+  addEmptyBtn: document.querySelector("#addEmptyBtn"),
   parseStatus: document.querySelector("#parseStatus"),
   itemsEmpty: document.querySelector("#itemsEmpty"),
   itemsList: document.querySelector("#itemsList"),
@@ -41,6 +42,9 @@ const els = {
 };
 
 const DRAFT_KEY = "print-news-studio-draft-v2";
+const FONT_PREF_KEY = "print-news-studio-font-preferences-v1";
+const DEFAULT_AULACESE_FONT_KEY = "BarlowCondensed-Bold";
+const DEFAULT_ENGLISH_FONT_KEY = "Poppins-Bold";
 const HEADER_WORDS = new Set(["date", "number", "no", "news", "title", "headline", "link", "url"]);
 const NEWS_COLOR_VALUES = {
   white: "#ffffff",
@@ -94,6 +98,48 @@ function englishFontKey() {
 
 function fontByKey(key) {
   return state.fonts.find((font) => font.key === key) || null;
+}
+
+function readFontPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem(FONT_PREF_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveFontPreferences() {
+  localStorage.setItem(FONT_PREF_KEY, JSON.stringify({
+    aulaceseFontKey: aulaceseFontKey(),
+    englishFontKey: englishFontKey()
+  }));
+}
+
+function preferredAulaceseFontKey(previous = null) {
+  const preferences = readFontPreferences();
+  const hasPreference = Object.prototype.hasOwnProperty.call(preferences, "aulaceseFontKey");
+  const candidates = [
+    previous,
+    hasPreference ? preferences.aulaceseFontKey : null,
+    DEFAULT_AULACESE_FONT_KEY,
+    state.fonts[0]?.key,
+    ""
+  ];
+  return candidates.find((key) => key != null && (key === "" || fontByKey(key))) || "";
+}
+
+function preferredEnglishFontKey(previous = null) {
+  const preferences = readFontPreferences();
+  const hasPreference = Object.prototype.hasOwnProperty.call(preferences, "englishFontKey");
+  const candidates = [
+    previous,
+    hasPreference ? preferences.englishFontKey : null,
+    DEFAULT_ENGLISH_FONT_KEY,
+    "random",
+    state.fonts[0]?.key,
+    ""
+  ];
+  return candidates.find((key) => key != null && (key === "random" || key === "" || fontByKey(key))) || "random";
 }
 
 function isAulaceseItem(item) {
@@ -212,6 +258,10 @@ function renderTitleHtml(item) {
 
 function titleText(item) {
   return plainTextFromHtml(titleHtml(item)) || normalizeWhitespace(item.title);
+}
+
+function subTextValue(item) {
+  return normalizeWhitespace(item.subText || "");
 }
 
 function normalizeWhitespace(value) {
@@ -423,6 +473,21 @@ function createId(index) {
   return `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`;
 }
 
+function emptyItem(index = 0) {
+  return {
+    id: createId(index),
+    date: "",
+    number: "",
+    title: "",
+    titleHtml: "",
+    subText: "",
+    subTextOpen: false,
+    link: "",
+    logoOffset: { x: 0, y: 0, scale: 1 },
+    newsColor: "white"
+  };
+}
+
 function logoOffset(item) {
   const offset = item.logoOffset || {};
   return {
@@ -519,6 +584,8 @@ function rowToItem(row, index) {
     number,
     title,
     titleHtml: escapeHtml(title),
+    subText: "",
+    subTextOpen: false,
     link,
     logoOffset: { x: 0, y: 0, scale: 1 },
     newsColor: "white"
@@ -642,14 +709,14 @@ function setSelectValue(select, value, fallback) {
 }
 
 function renderFontOptions() {
-  const currentAulacese = aulaceseFontKey();
-  const currentEnglish = englishFontKey();
+  const currentAulacese = els.aulaceseFontSelect.options.length ? els.aulaceseFontSelect.value : null;
+  const currentEnglish = els.englishFontSelect.options.length ? els.englishFontSelect.value : null;
   const fontOptions = state.fonts.map(fontOptionHtml).join("");
 
   els.aulaceseFontSelect.innerHTML = `<option value="">Default</option>${fontOptions}`;
   els.englishFontSelect.innerHTML = `<option value="random">Random</option><option value="">Default</option>${fontOptions}`;
-  setSelectValue(els.aulaceseFontSelect, currentAulacese, "");
-  setSelectValue(els.englishFontSelect, currentEnglish, "random");
+  setSelectValue(els.aulaceseFontSelect, preferredAulaceseFontKey(currentAulacese), "");
+  setSelectValue(els.englishFontSelect, preferredEnglishFontKey(currentEnglish), "random");
 }
 
 async function openFontFolder() {
@@ -765,6 +832,8 @@ function renderItems() {
 
     const dateInput = node.querySelector(".date-input");
     const titleInput = node.querySelector(".title-input");
+    const subTextToggle = node.querySelector(".subtext-toggle");
+    const subTextInput = node.querySelector(".subtext-input");
     const linkInput = node.querySelector(".link-input");
     const openLinkBtn = node.querySelector(".open-link");
 
@@ -773,6 +842,10 @@ function renderItems() {
     item.titleHtml = titleHtml(item);
     item.title = titleText(item);
     titleInput.innerHTML = item.titleHtml;
+    if (typeof item.subTextOpen !== "boolean") item.subTextOpen = false;
+    subTextInput.value = item.subText || "";
+    subTextInput.hidden = !item.subTextOpen;
+    subTextToggle.classList.toggle("active", item.subTextOpen);
     linkInput.value = item.link;
     logoSource.textContent = sourceLabel(item);
 
@@ -807,6 +880,14 @@ function renderItems() {
       item.titleHtml = titleHtml(item);
       item.title = titleText(item);
       titleInput.innerHTML = item.titleHtml;
+      itemPreview.innerHTML = renderItemPreviewHtml(item, index);
+    });
+    subTextToggle.addEventListener("click", () => {
+      item.subTextOpen = !item.subTextOpen;
+      render();
+    });
+    subTextInput.addEventListener("input", () => {
+      item.subText = subTextInput.value;
       itemPreview.innerHTML = renderItemPreviewHtml(item, index);
     });
     linkInput.addEventListener("input", () => {
@@ -870,10 +951,13 @@ function renderItems() {
 function commitItemFromCard(item, node) {
   const dateInput = node.querySelector(".date-input");
   const titleInput = node.querySelector(".title-input");
+  const subTextInput = node.querySelector(".subtext-input");
   const linkInput = node.querySelector(".link-input");
   item.date = formatDisplayDate(dateInput.value);
   item.titleHtml = sanitizeRichHtml(titleInput.innerHTML);
   item.title = titleText(item);
+  item.subText = String(subTextInput?.value || "").trim();
+  item.subTextOpen = Boolean(subTextInput && !subTextInput.hidden);
   item.link = normalizeLink(linkInput.value);
 }
 
@@ -890,6 +974,8 @@ function renderItemPreviewHtml(item, index) {
   const source = sourceName(item);
   const offset = logoOffset(item);
   const bg = newsBackground(item, index);
+  const subText = subTextValue(item);
+  const subTextHtml = subText ? `<p class="preview-subtext">${escapeHtml(subText)}</p>` : "";
   const logoHtml = logo
     ? `<img src="${logo.url}" alt="${escapeHtml(label)} logo" style="transform: translate(${offset.x}px, ${offset.y}px) scale(${offset.scale})">`
     : `<a class="preview-search-logo" href="${missingLogoSearchUrl(source)}" target="_blank" rel="noopener">Search Logo</a>`;
@@ -905,6 +991,7 @@ function renderItemPreviewHtml(item, index) {
         </div>
       </div>
       <h3 class="preview-title" style="font-family: ${escapeHtml(headlineFontStack(item, index))}">${renderTitleHtml(item) || "Untitled headline"}</h3>
+      ${subTextHtml}
     </article>
   `;
 }
@@ -961,6 +1048,14 @@ function createItemsFromPaste() {
   render();
 }
 
+function addEmptyItem() {
+  commitVisibleItems();
+  state.items.push(emptyItem(state.items.length));
+  if (newsColorMode() === "random") assignRandomNewsColors();
+  els.parseStatus.textContent = "Empty news section added.";
+  render();
+}
+
 function sampleText() {
   return [
     ["Date", "Number", "Title", "Link"].join("\t"),
@@ -1005,6 +1100,7 @@ function exportItems() {
     number: item.number,
     title: titleText(item),
     titleHtml: titleHtml(item),
+    subText: subTextValue(item),
     link: item.link,
     source: sourceLabel(item)
   }));
@@ -1067,7 +1163,7 @@ function pngFilename(item) {
   return `${date} ${headline} (${source}).png`;
 }
 
-function wrapCanvasText(ctx, text, maxWidth) {
+function wrapCanvasText(ctx, text, maxWidth, fallback = "Untitled headline") {
   const words = normalizeWhitespace(text).split(" ").filter(Boolean);
   const lines = [];
   let line = "";
@@ -1082,7 +1178,7 @@ function wrapCanvasText(ctx, text, maxWidth) {
     }
   }
   if (line) lines.push(line);
-  return lines.length ? lines : ["Untitled headline"];
+  return lines.length ? lines : (fallback ? [fallback] : []);
 }
 
 function headlineSegments(item) {
@@ -1185,6 +1281,20 @@ function drawHeadlineLines(ctx, lines, x, y, item, index) {
   }
 }
 
+function subTextFont() {
+  return '400 22px "Times New Roman", Times, serif';
+}
+
+function drawSubTextLines(ctx, lines, x, y) {
+  ctx.textBaseline = "top";
+  ctx.font = subTextFont();
+  ctx.fillStyle = "#000000";
+  for (const line of lines) {
+    ctx.fillText(line, x, y);
+    y += 28;
+  }
+}
+
 function roundedCanvasCopy(canvas, ratio = 0.15) {
   const output = document.createElement("canvas");
   output.width = canvas.width;
@@ -1259,8 +1369,11 @@ async function renderItemPng(item, index) {
   const sourceWidth = ctx.measureText(` | ${source}`).width;
   const metaWidth = logoWidth + 20 + dateWidth + 10 + sourceWidth;
   const finalWidth = Math.ceil(Math.max(800, maxLineWidth + 45, metaWidth + 45));
+  ctx.font = subTextFont();
+  const subTextLines = subTextValue(item) ? wrapCanvasText(ctx, subTextValue(item), finalWidth - 40, "") : [];
   const textHeight = lines.length * 58;
-  const finalHeight = 20 + logoHeight + 20 + textHeight + 20;
+  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 28 : 0;
+  const finalHeight = 20 + logoHeight + 20 + textHeight + subTextHeight + 20;
 
   canvas.width = finalWidth;
   canvas.height = finalHeight;
@@ -1287,6 +1400,9 @@ async function renderItemPng(item, index) {
   ctx.fillText(` | ${source}`, dx + dw + 10, dy + 2);
 
   drawHeadlineLines(ctx, lines, 20, 100, item, index);
+  if (subTextLines.length) {
+    drawSubTextLines(ctx, subTextLines, 20, 100 + textHeight + 14);
+  }
   const outputCanvas = els.roundCorners.checked ? roundedCanvasCopy(canvas, 0.05) : canvas;
 
   return {
@@ -1392,6 +1508,7 @@ async function renderPngZip() {
 }
 
 els.parseBtn.addEventListener("click", createItemsFromPaste);
+els.addEmptyBtn.addEventListener("click", addEmptyItem);
 els.updateBtn.addEventListener("click", checkForUpdate);
 els.sampleBtn.addEventListener("click", () => {
   els.excelPaste.value = sampleText();
@@ -1422,8 +1539,12 @@ els.newsColorMode.addEventListener("change", () => {
   if (newsColorMode() === "random") assignRandomNewsColors();
   render();
 });
-els.aulaceseFontSelect.addEventListener("change", render);
+els.aulaceseFontSelect.addEventListener("change", () => {
+  saveFontPreferences();
+  render();
+});
 els.englishFontSelect.addEventListener("change", () => {
+  saveFontPreferences();
   if (englishFontKey() === "random") {
     state.items.forEach((item) => {
       delete item.randomEnglishFontKey;

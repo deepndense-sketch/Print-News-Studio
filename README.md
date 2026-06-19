@@ -32,11 +32,13 @@ http://localhost:4862
 
 1. Copy rows from Excel.
 2. Paste into the Excel paste box.
-3. Check generated news sections.
-4. Paste missing source logos into the logo boxes.
-5. Edit text directly. Bold text is also highlighted light yellow.
-6. Choose the Location folder in Preview and export.
-7. Render the PNG list or ZIP.
+3. Use Add empty list when you want to start with one blank news section.
+4. Check generated news sections.
+5. Paste missing source logos into the logo boxes.
+6. Edit text directly. Bold text is highlighted light yellow without adding extra weight.
+7. Use Sub Text for a smaller Times New Roman line under the headline.
+8. Choose the Location folder in Preview and export.
+9. Render the PNG list or ZIP.
 
 ## Fonts
 
@@ -44,8 +46,10 @@ Copy headline font files into the font folder shown in the app, then reopen or s
 
 The edit section has two headline font choices:
 
-- Aulacese: used for news headlines that contain `//`.
-- English: used for the other headlines. Random picks a font per news item.
+- Aulacese: used for news headlines that contain `//`. The first default is `BarlowCondensed-Bold`.
+- English: used for the other headlines. The first default is `Poppins-Bold`; Random picks a font per news item.
+
+Changing either dropdown saves that choice as the next default on that computer.
 
 Date and source text keep the normal app font.
 

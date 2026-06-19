@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "downloadUrl": "https://github.com/deepndense-sketch/Print-News-Studio/raw/main/PrintNewsStudio%20Portable.zip",
   "pageUrl": "https://github.com/deepndense-sketch/Print-News-Studio",
-  "notes": "Make font dropdowns show reliably and add a Windows folder picker"
+  "notes": "Add default font preferences, Sub Text, and empty news item creation"
 }
