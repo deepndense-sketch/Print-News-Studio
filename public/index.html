@@ -31,6 +31,7 @@
             </div>
           </div>
           <textarea id="excelPaste" spellcheck="false" placeholder="Date	Number	Title	Link"></textarea>
+          <div id="pastePreview" class="paste-preview" hidden></div>
           <div class="paste-actions">
             <button id="parseBtn" class="primary">Create News Sections</button>
             <button id="sampleBtn" class="ghost">Try Sample</button>
@@ -105,17 +106,15 @@
         <div class="number-badge"></div>
         <div class="card-fields">
           <div class="title-input" contenteditable="true" data-placeholder="Title"></div>
-          <div class="subtext-tools">
-            <button class="subtext-toggle" type="button" title="Show or hide sub text"><strong>Sub Text</strong></button>
-            <textarea class="subtext-input" spellcheck="false" placeholder="Sub Text"></textarea>
-          </div>
           <div class="meta-line">
             <input class="date-input" type="text" placeholder="Date">
             <div class="link-line">
               <input class="link-input" type="text" placeholder="Link">
               <button class="open-link" title="Open link">Open Link</button>
             </div>
+            <button class="subtext-toggle" type="button" title="Show or hide sub text"><strong>Sub Text</strong></button>
           </div>
+          <textarea class="subtext-input" spellcheck="false" placeholder="Sub Text"></textarea>
         </div>
         <div class="logo-drop" tabindex="0" title="Paste a source logo here">
           <img alt="">

@@ -12,6 +12,7 @@ const state = {
 
 const els = {
   excelPaste: document.querySelector("#excelPaste"),
+  pastePreview: document.querySelector("#pastePreview"),
   parseBtn: document.querySelector("#parseBtn"),
   sampleBtn: document.querySelector("#sampleBtn"),
   addEmptyBtn: document.querySelector("#addEmptyBtn"),
@@ -119,8 +120,8 @@ function preferredAulaceseFontKey(previous = null) {
   const preferences = readFontPreferences();
   const hasPreference = Object.prototype.hasOwnProperty.call(preferences, "aulaceseFontKey");
   const candidates = [
-    previous,
     hasPreference ? preferences.aulaceseFontKey : null,
+    previous,
     DEFAULT_AULACESE_FONT_KEY,
     state.fonts[0]?.key,
     ""
@@ -132,8 +133,8 @@ function preferredEnglishFontKey(previous = null) {
   const preferences = readFontPreferences();
   const hasPreference = Object.prototype.hasOwnProperty.call(preferences, "englishFontKey");
   const candidates = [
-    previous,
     hasPreference ? preferences.englishFontKey : null,
+    previous,
     DEFAULT_ENGLISH_FONT_KEY,
     "random",
     state.fonts[0]?.key,
@@ -262,6 +263,85 @@ function titleText(item) {
 
 function subTextValue(item) {
   return normalizeWhitespace(item.subText || "");
+}
+
+function caretCharacterOffsetWithin(element) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.endContainer)) return null;
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(element);
+  preRange.setEnd(range.endContainer, range.endOffset);
+  return preRange.toString().length;
+}
+
+function restoreCaretByCharacterOffset(element, offset) {
+  if (offset == null || document.activeElement !== element) return;
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node = walker.nextNode();
+
+  while (node) {
+    const length = node.textContent.length;
+    if (remaining <= length) {
+      range.setStart(node, remaining);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+    remaining -= length;
+    node = walker.nextNode();
+  }
+
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function normalizeTitleEditor(titleInput) {
+  const clean = sanitizeRichHtml(titleInput.innerHTML);
+  if (titleInput.innerHTML !== clean) {
+    const offset = caretCharacterOffsetWithin(titleInput);
+    titleInput.innerHTML = clean;
+    restoreCaretByCharacterOffset(titleInput, offset);
+  }
+  return clean;
+}
+
+function applyTitleHighlight(titleInput) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return document.execCommand("bold", false, null);
+  }
+  if (!titleInput.contains(selection.anchorNode) || !titleInput.contains(selection.focusNode)) {
+    return false;
+  }
+
+  const range = selection.getRangeAt(0);
+  const strong = document.createElement("strong");
+  strong.appendChild(range.extractContents());
+  range.insertNode(strong);
+
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(strong);
+  nextRange.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+  normalizeTitleEditor(titleInput);
+  return true;
+}
+
+function updateTitleFromInput(titleInput, item, itemPreview, index, normalizeEditor = false) {
+  item.titleHtml = normalizeEditor ? normalizeTitleEditor(titleInput) : sanitizeRichHtml(titleInput.innerHTML);
+  item.title = titleText(item);
+  itemPreview.innerHTML = renderItemPreviewHtml(item, index);
 }
 
 function normalizeWhitespace(value) {
@@ -601,6 +681,39 @@ function parseExcelText(text) {
     .filter((item) => item.date || item.title || item.link);
 }
 
+function pastePreviewRows(text) {
+  const rows = parseTsvClipboard(text);
+  if (!rows.length) return [];
+  return (looksLikeHeader(rows[0]) ? rows.slice(1) : rows)
+    .map((row) => row.map((cell) => normalizeWhitespace(cell)))
+    .filter((row) => row.some(Boolean));
+}
+
+function pastePreviewRowHtml(row) {
+  const linkIndex = row.findIndex(isUrl);
+  const date = row[0] || "";
+  const number = row[1] || "";
+  const title = row[2] || "";
+  const link = linkIndex >= 0 ? row[linkIndex] : row[3] || "";
+  return `
+    <div class="paste-preview-row">
+      <span class="paste-preview-cell" title="${escapeHtml(date)}">${escapeHtml(date)}</span>
+      <span class="paste-preview-cell" title="${escapeHtml(number)}">${escapeHtml(number)}</span>
+      <span class="paste-preview-cell paste-preview-title" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
+      <span class="paste-preview-cell" title="${escapeHtml(link)}">${escapeHtml(link)}</span>
+    </div>
+  `;
+}
+
+function renderPastePreview() {
+  if (!els.pastePreview) return;
+  const rows = pastePreviewRows(els.excelPaste.value);
+  els.pastePreview.hidden = rows.length === 0;
+  els.pastePreview.innerHTML = rows.length
+    ? `<div class="paste-preview-table">${rows.map(pastePreviewRowHtml).join("")}</div>`
+    : "";
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -871,11 +984,26 @@ function renderItems() {
       itemPreview.innerHTML = renderItemPreviewHtml(item, index);
     });
     titleInput.addEventListener("input", () => {
-      item.titleHtml = sanitizeRichHtml(titleInput.innerHTML);
-      item.title = titleText(item);
-      itemPreview.innerHTML = renderItemPreviewHtml(item, index);
+      updateTitleFromInput(titleInput, item, itemPreview, index, /font-weight|<b\b|<strong\b/i.test(titleInput.innerHTML));
     });
-    titleInput.addEventListener("paste", pasteIntoTitle);
+    titleInput.addEventListener("beforeinput", (event) => {
+      if (event.inputType !== "formatBold") return;
+      event.preventDefault();
+      applyTitleHighlight(titleInput);
+      updateTitleFromInput(titleInput, item, itemPreview, index, true);
+    });
+    titleInput.addEventListener("keydown", (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
+      event.preventDefault();
+      applyTitleHighlight(titleInput);
+      updateTitleFromInput(titleInput, item, itemPreview, index, true);
+    });
+    titleInput.addEventListener("paste", (event) => {
+      pasteIntoTitle(event);
+      window.setTimeout(() => {
+        updateTitleFromInput(titleInput, item, itemPreview, index, true);
+      }, 0);
+    });
     titleInput.addEventListener("blur", () => {
       item.titleHtml = titleHtml(item);
       item.title = titleText(item);
@@ -1041,6 +1169,7 @@ function pasteIntoTitle(event) {
 }
 
 function createItemsFromPaste() {
+  renderPastePreview();
   const items = parseExcelText(els.excelPaste.value);
   state.items = items;
   if (newsColorMode() === "random") assignRandomNewsColors();
@@ -1282,7 +1411,7 @@ function drawHeadlineLines(ctx, lines, x, y, item, index) {
 }
 
 function subTextFont() {
-  return '400 22px "Times New Roman", Times, serif';
+  return '400 26.4px "Times New Roman", Times, serif';
 }
 
 function drawSubTextLines(ctx, lines, x, y) {
@@ -1291,7 +1420,7 @@ function drawSubTextLines(ctx, lines, x, y) {
   ctx.fillStyle = "#000000";
   for (const line of lines) {
     ctx.fillText(line, x, y);
-    y += 28;
+    y += 34;
   }
 }
 
@@ -1372,7 +1501,7 @@ async function renderItemPng(item, index) {
   ctx.font = subTextFont();
   const subTextLines = subTextValue(item) ? wrapCanvasText(ctx, subTextValue(item), finalWidth - 40, "") : [];
   const textHeight = lines.length * 58;
-  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 28 : 0;
+  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 34 : 0;
   const finalHeight = 20 + logoHeight + 20 + textHeight + subTextHeight + 20;
 
   canvas.width = finalWidth;
@@ -1510,8 +1639,10 @@ async function renderPngZip() {
 els.parseBtn.addEventListener("click", createItemsFromPaste);
 els.addEmptyBtn.addEventListener("click", addEmptyItem);
 els.updateBtn.addEventListener("click", checkForUpdate);
+els.excelPaste.addEventListener("input", renderPastePreview);
 els.sampleBtn.addEventListener("click", () => {
   els.excelPaste.value = sampleText();
+  renderPastePreview();
   createItemsFromPaste();
 });
 els.saveDraftBtn.addEventListener("click", saveDraft);
@@ -1520,6 +1651,7 @@ els.clearBtn.addEventListener("click", () => {
   if (!confirm("Clear the current screen? Saved logos and exports will stay.")) return;
   state.items = [];
   els.excelPaste.value = "";
+  renderPastePreview();
   els.parseStatus.textContent = "Screen cleared.";
   render();
 });

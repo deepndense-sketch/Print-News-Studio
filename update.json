@@ -1,6 +1,6 @@
 {
-  "version": "1.0.7",
+  "version": "1.0.8",
   "downloadUrl": "https://github.com/deepndense-sketch/Print-News-Studio/raw/main/PrintNewsStudio%20Portable.zip",
   "pageUrl": "https://github.com/deepndense-sketch/Print-News-Studio",
-  "notes": "Fix portable ZIP extraction layout and add clearer launcher startup checks"
+  "notes": "Improve font defaults, sub text editing, title highlights, paste preview, and logo preview alignment"
 }
