@@ -1510,7 +1510,7 @@ function drawHeadlineLines(ctx, lines, x, y, item, index) {
 }
 
 function subTextFont() {
-  return '400 52.8px "Times New Roman", Times, serif';
+  return '400 42.24px "Times New Roman", Times, serif';
 }
 
 function measureSubTextPart(ctx, text) {
@@ -1566,14 +1566,14 @@ function drawSubTextLines(ctx, lines, x, y) {
       const width = measureSubTextPart(ctx, part.text);
       if (part.bold) {
         ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
-        drawRoundRect(ctx, xText - 4, y - 4, width + 8, 62, 4);
+        drawRoundRect(ctx, xText - 4, y - 4, width + 8, 50, 4);
         ctx.fill();
       }
       ctx.fillStyle = "#000000";
       ctx.fillText(part.text, xText, y);
       xText += width;
     }
-    y += 64;
+    y += 52;
   }
 }
 
@@ -1654,7 +1654,7 @@ async function renderItemPng(item, index) {
   ctx.font = subTextFont();
   const subTextLines = subTextValue(item) ? wrapSubTextSegments(ctx, subTextSegments(item), finalWidth - 40) : [];
   const textHeight = lines.length * 58;
-  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 64 : 0;
+  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 52 : 0;
   const finalHeight = 20 + logoHeight + 20 + textHeight + subTextHeight + 20;
 
   canvas.width = finalWidth;
