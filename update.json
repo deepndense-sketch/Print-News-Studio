@@ -1,6 +1,6 @@
 {
-  "version": "1.0.8",
+  "version": "1.0.9",
   "downloadUrl": "https://github.com/deepndense-sketch/Print-News-Studio/raw/main/PrintNewsStudio%20Portable.zip",
   "pageUrl": "https://github.com/deepndense-sketch/Print-News-Studio",
-  "notes": "Improve font defaults, sub text editing, title highlights, paste preview, and logo preview alignment"
+  "notes": "Add self-update that preserves user data, Turn Off app button, and larger highlighted sub text"
 }

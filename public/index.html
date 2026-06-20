@@ -14,9 +14,11 @@
       </div>
       <div class="top-actions">
         <button id="updateBtn" class="ghost" title="Check for a newer portable version">Check Update</button>
+        <button id="installUpdateBtn" class="primary" title="Download and install the newest version" hidden>Update App</button>
         <button id="saveDraftBtn" class="ghost" title="Save this working draft in the browser">Save Draft</button>
         <button id="loadDraftBtn" class="ghost" title="Load last browser draft">Load Draft</button>
         <button id="clearBtn" class="danger" title="Clear the current screen">Clear</button>
+        <button id="shutdownBtn" class="danger shutdown-btn" title="Turn off the local app server"><span aria-hidden="true">&#x23FB;</span><span>Turn Off</span></button>
       </div>
       <p id="updateStatus" class="status update-status"></p>
     </header>
@@ -114,7 +116,7 @@
             </div>
             <button class="subtext-toggle" type="button" title="Show or hide sub text"><strong>Sub Text</strong></button>
           </div>
-          <textarea class="subtext-input" spellcheck="false" placeholder="Sub Text"></textarea>
+          <div class="subtext-input" contenteditable="true" spellcheck="false" data-placeholder="Sub Text"></div>
         </div>
         <div class="logo-drop" tabindex="0" title="Paste a source logo here">
           <img alt="">

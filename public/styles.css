@@ -70,8 +70,17 @@ button.danger,
   border-color: #e2b8b0;
 }
 
+.shutdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff7f5;
+  font-weight: 800;
+}
+
 input,
 textarea,
+.subtext-input,
 .title-input {
   width: 100%;
   border: 1px solid var(--line);
@@ -467,10 +476,19 @@ h2 {
   color: #8b96a5;
 }
 
+.subtext-input[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #8b96a5;
+}
+
 .title-input strong,
 .title-input b,
 .preview-title strong,
-.preview-title b {
+.preview-title b,
+.subtext-input strong,
+.subtext-input b,
+.preview-subtext strong,
+.preview-subtext b {
   background: #fff176;
   font-weight: inherit;
   box-decoration-break: clone;
@@ -490,13 +508,14 @@ h2 {
 }
 
 .subtext-input {
-  min-height: 62px;
-  padding: 8px 10px;
-  resize: vertical;
+  min-height: 112px;
+  padding: 10px 12px;
   font-family: "Times New Roman", Times, serif;
-  font-size: 16.8px;
+  font-size: 33.6px;
   font-weight: 400;
-  line-height: 1.35;
+  line-height: 1.18;
+  overflow: auto;
+  overflow-wrap: anywhere;
 }
 
 .subtext-input[hidden] {
@@ -716,11 +735,11 @@ h2 {
 
 .preview-subtext {
   max-width: 100%;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-family: "Times New Roman", Times, serif;
-  font-size: 16.2px;
+  font-size: 32.4px;
   font-weight: 400;
-  line-height: 1.28;
+  line-height: 1.18;
   overflow-wrap: anywhere;
 }
 

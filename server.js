@@ -15,6 +15,7 @@ const LOGO_DIR = path.join(DATA_DIR, "logos");
 const FONT_DIR = path.join(DATA_DIR, "fonts");
 const EXPORT_DIR = path.join(DATA_DIR, "exports");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+const UPDATE_DIR = path.join(DATA_DIR, "updates");
 const APP_VERSION = packageInfo.version || "0.0.0";
 const UPDATE_INFO_URL = "https://raw.githubusercontent.com/deepndense-sketch/Print-News-Studio/main/update.json";
 
@@ -42,7 +43,7 @@ const MIME = {
 };
 
 function ensureFolders() {
-  for (const dir of [DATA_DIR, LOGO_DIR, FONT_DIR, EXPORT_DIR]) {
+  for (const dir of [DATA_DIR, LOGO_DIR, FONT_DIR, EXPORT_DIR, UPDATE_DIR]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }
@@ -304,6 +305,190 @@ async function checkForUpdate() {
       error: error.message || "Could not check updates."
     };
   }
+}
+
+function downloadFile(fileUrl, target, limit = 250 * 1024 * 1024, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(fileUrl);
+    const client = parsed.protocol === "http:" ? http : https;
+    const req = client.get(parsed, {
+      headers: {
+        "Accept": "application/zip,application/octet-stream,*/*",
+        "User-Agent": `PrintNewsStudio/${APP_VERSION}`
+      }
+    }, (res) => {
+      const status = res.statusCode || 0;
+      if (status >= 300 && status < 400 && res.headers.location && redirects < 5) {
+        res.resume();
+        resolve(downloadFile(new URL(res.headers.location, fileUrl).toString(), target, limit, redirects + 1));
+        return;
+      }
+      if (status !== 200) {
+        res.resume();
+        reject(new Error(`Update download failed (${status}).`));
+        return;
+      }
+
+      let size = 0;
+      const output = fs.createWriteStream(target);
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > limit) {
+          req.destroy(new Error("Update download is too large."));
+          output.destroy();
+          return;
+        }
+      });
+      res.pipe(output);
+      output.on("finish", () => output.close(() => resolve(target)));
+      output.on("error", reject);
+    });
+    req.setTimeout(120000, () => req.destroy(new Error("Update download timed out.")));
+    req.on("error", reject);
+  });
+}
+
+function runPowerShell(args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile("powershell.exe", args, { windowsHide: true, ...options }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error((stderr || stdout || error.message || "PowerShell failed.").trim()));
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function expandZip(zipPath, destination) {
+  fs.mkdirSync(destination, { recursive: true });
+  await runPowerShell([
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    "Expand-Archive -LiteralPath $env:PRINT_NEWS_ZIP -DestinationPath $env:PRINT_NEWS_DEST -Force"
+  ], {
+    env: { ...process.env, PRINT_NEWS_ZIP: zipPath, PRINT_NEWS_DEST: destination }
+  });
+}
+
+function findPackageRoot(folder, depth = 0) {
+  const packagePath = path.join(folder, "package.json");
+  if (fs.existsSync(packagePath)) return folder;
+  if (depth >= 2) return "";
+  for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const found = findPackageRoot(path.join(folder, entry.name), depth + 1);
+    if (found) return found;
+  }
+  return "";
+}
+
+function psSingleQuoted(value) {
+  return `'${String(value || "").replace(/'/g, "''")}'`;
+}
+
+function updateScript(appDir, packageDir) {
+  const app = psSingleQuoted(appDir);
+  const source = psSingleQuoted(packageDir);
+  const pid = String(process.pid);
+  return `$ErrorActionPreference = 'Stop'
+$appDir = ${app}
+$packageDir = ${source}
+$currentPid = ${pid}
+$log = Join-Path $appDir 'data\\update.log'
+function Write-UpdateLog($message) {
+  $line = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $message
+  Add-Content -LiteralPath $log -Value $line
+}
+try {
+  Write-UpdateLog 'Waiting for Print News Studio to close.'
+  while (Get-Process -Id $currentPid -ErrorAction SilentlyContinue) {
+    Start-Sleep -Milliseconds 300
+  }
+  Start-Sleep -Milliseconds 500
+  Write-UpdateLog 'Copying program files.'
+  foreach ($name in @('PrintNewsStudio.exe', 'server.js', 'package.json', 'Start PrintNewsStudio.cmd')) {
+    $src = Join-Path $packageDir $name
+    if (Test-Path -LiteralPath $src) {
+      Copy-Item -LiteralPath $src -Destination (Join-Path $appDir $name) -Force
+    }
+  }
+  $publicSrc = Join-Path $packageDir 'public'
+  $publicDest = Join-Path $appDir 'public'
+  if (Test-Path -LiteralPath $publicSrc) {
+    if (Test-Path -LiteralPath $publicDest) {
+      Remove-Item -LiteralPath $publicDest -Recurse -Force
+    }
+    Copy-Item -LiteralPath $publicSrc -Destination $publicDest -Recurse -Force
+  }
+  $runtimeSrc = Join-Path $packageDir 'runtime'
+  $runtimeDest = Join-Path $appDir 'runtime'
+  if ((Test-Path -LiteralPath $runtimeSrc) -and -not (Test-Path -LiteralPath $runtimeDest)) {
+    Copy-Item -LiteralPath $runtimeSrc -Destination $runtimeDest -Recurse -Force
+  }
+  Write-UpdateLog 'User data folder was preserved.'
+  $exe = Join-Path $appDir 'PrintNewsStudio.exe'
+  if (Test-Path -LiteralPath $exe) {
+    Start-Process -FilePath $exe -WorkingDirectory $appDir
+  }
+  Write-UpdateLog 'Update complete.'
+} catch {
+  Write-UpdateLog ('Update failed: ' + $_.Exception.Message)
+}
+`;
+}
+
+function startDetachedPowerShell(scriptPath) {
+  const child = execFile("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    scriptPath
+  ], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true
+  });
+  child.unref();
+}
+
+async function installUpdate() {
+  const update = await checkForUpdate();
+  if (update.error) throw new Error(update.error);
+  if (!update.updateAvailable) {
+    return { installing: false, currentVersion: APP_VERSION, latestVersion: update.latestVersion, message: "Version is current." };
+  }
+  const downloadUrl = update.downloadUrl || update.pageUrl;
+  if (!/^https?:\/\//i.test(downloadUrl)) throw new Error("The update file link is missing.");
+
+  ensureFolders();
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const folder = path.join(UPDATE_DIR, `update-${stamp}`);
+  const zipPath = path.join(folder, "PrintNewsStudio Portable.zip");
+  const stage = path.join(folder, "package");
+  fs.mkdirSync(folder, { recursive: true });
+
+  await downloadFile(downloadUrl, zipPath);
+  await expandZip(zipPath, stage);
+  const packageRoot = findPackageRoot(stage);
+  if (!packageRoot) throw new Error("The downloaded update does not contain package.json.");
+  if (!fs.existsSync(path.join(packageRoot, "server.js")) || !fs.existsSync(path.join(packageRoot, "public", "index.html"))) {
+    throw new Error("The downloaded update is missing app files.");
+  }
+
+  const nextPackage = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+  const nextVersion = String(nextPackage.version || update.latestVersion || "");
+  if (compareVersions(nextVersion, APP_VERSION) <= 0) {
+    throw new Error(`Downloaded version ${nextVersion || "unknown"} is not newer than ${APP_VERSION}.`);
+  }
+
+  const scriptPath = path.join(folder, "apply-update.ps1");
+  fs.writeFileSync(scriptPath, updateScript(ROOT, packageRoot), "utf8");
+  startDetachedPowerShell(scriptPath);
+  return { installing: true, currentVersion: APP_VERSION, latestVersion: nextVersion, message: "Update is installing. The app will close and reopen." };
 }
 
 function readBody(req, limit = 25 * 1024 * 1024) {
@@ -600,6 +785,19 @@ async function routeApi(req, res, url) {
     return true;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/update-install") {
+    const result = await installUpdate();
+    sendJson(res, 200, result);
+    if (result.installing) scheduleShutdown();
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/shutdown") {
+    sendJson(res, 200, { closing: true, message: "Print News Studio is turning off." });
+    scheduleShutdown();
+    return true;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/settings") {
     sendJson(res, 200, settingsResponse());
     return true;
@@ -759,7 +957,21 @@ function createServer() {
   });
 }
 
-createServer().listen(PORT, () => {
+let server = null;
+
+function scheduleShutdown() {
+  setTimeout(() => {
+    if (!server) {
+      process.exit(0);
+      return;
+    }
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1500).unref();
+  }, 500).unref();
+}
+
+server = createServer();
+server.listen(PORT, () => {
   console.log(`Print News Studio running at http://localhost:${PORT}`);
   console.log(`Logos: ${LOGO_DIR}`);
   console.log(`Exports: ${EXPORT_DIR}`);

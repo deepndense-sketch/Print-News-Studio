@@ -3,6 +3,7 @@ const state = {
   logos: new Map(),
   fonts: [],
   fontFolder: "",
+  pendingUpdate: null,
   settings: {
     exportFolder: "",
     exportFolderInput: "",
@@ -22,10 +23,12 @@ const els = {
   previewList: document.querySelector("#previewList"),
   itemTemplate: document.querySelector("#itemTemplate"),
   updateBtn: document.querySelector("#updateBtn"),
+  installUpdateBtn: document.querySelector("#installUpdateBtn"),
   updateStatus: document.querySelector("#updateStatus"),
   saveDraftBtn: document.querySelector("#saveDraftBtn"),
   loadDraftBtn: document.querySelector("#loadDraftBtn"),
   clearBtn: document.querySelector("#clearBtn"),
+  shutdownBtn: document.querySelector("#shutdownBtn"),
   roundCorners: document.querySelector("#roundCorners"),
   exportFolderInput: document.querySelector("#exportFolderInput"),
   saveExportFolderBtn: document.querySelector("#saveExportFolderBtn"),
@@ -261,8 +264,17 @@ function titleText(item) {
   return plainTextFromHtml(titleHtml(item)) || normalizeWhitespace(item.title);
 }
 
+function subTextHtml(item) {
+  const html = item.subTextHtml || escapeHtml(item.subText || "");
+  return sanitizeRichHtml(html);
+}
+
 function subTextValue(item) {
-  return normalizeWhitespace(item.subText || "");
+  return plainTextFromHtml(subTextHtml(item));
+}
+
+function renderSubTextHtml(item) {
+  return subTextHtml(item);
 }
 
 function caretCharacterOffsetWithin(element) {
@@ -305,22 +317,22 @@ function restoreCaretByCharacterOffset(element, offset) {
   selection.addRange(range);
 }
 
-function normalizeTitleEditor(titleInput) {
-  const clean = sanitizeRichHtml(titleInput.innerHTML);
-  if (titleInput.innerHTML !== clean) {
-    const offset = caretCharacterOffsetWithin(titleInput);
-    titleInput.innerHTML = clean;
-    restoreCaretByCharacterOffset(titleInput, offset);
+function normalizeRichEditor(editor) {
+  const clean = sanitizeRichHtml(editor.innerHTML);
+  if (editor.innerHTML !== clean) {
+    const offset = caretCharacterOffsetWithin(editor);
+    editor.innerHTML = clean;
+    restoreCaretByCharacterOffset(editor, offset);
   }
   return clean;
 }
 
-function applyTitleHighlight(titleInput) {
+function applyRichHighlight(editor) {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
     return document.execCommand("bold", false, null);
   }
-  if (!titleInput.contains(selection.anchorNode) || !titleInput.contains(selection.focusNode)) {
+  if (!editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode)) {
     return false;
   }
 
@@ -334,13 +346,19 @@ function applyTitleHighlight(titleInput) {
   nextRange.collapse(false);
   selection.removeAllRanges();
   selection.addRange(nextRange);
-  normalizeTitleEditor(titleInput);
+  normalizeRichEditor(editor);
   return true;
 }
 
 function updateTitleFromInput(titleInput, item, itemPreview, index, normalizeEditor = false) {
-  item.titleHtml = normalizeEditor ? normalizeTitleEditor(titleInput) : sanitizeRichHtml(titleInput.innerHTML);
+  item.titleHtml = normalizeEditor ? normalizeRichEditor(titleInput) : sanitizeRichHtml(titleInput.innerHTML);
   item.title = titleText(item);
+  itemPreview.innerHTML = renderItemPreviewHtml(item, index);
+}
+
+function updateSubTextFromInput(subTextInput, item, itemPreview, index, normalizeEditor = false) {
+  item.subTextHtml = normalizeEditor ? normalizeRichEditor(subTextInput) : sanitizeRichHtml(subTextInput.innerHTML);
+  item.subText = subTextValue(item);
   itemPreview.innerHTML = renderItemPreviewHtml(item, index);
 }
 
@@ -852,6 +870,8 @@ async function chooseFontFolder() {
 
 async function checkForUpdate() {
   els.updateBtn.disabled = true;
+  els.installUpdateBtn.hidden = true;
+  state.pendingUpdate = null;
   els.updateStatus.textContent = "Checking update...";
   try {
     const result = await api("/api/update-check");
@@ -860,8 +880,9 @@ async function checkForUpdate() {
       return;
     }
     if (result.updateAvailable) {
-      const url = result.downloadUrl || result.pageUrl;
-      els.updateStatus.innerHTML = `New version ${escapeHtml(result.latestVersion)} available. <a href="${escapeHtml(url)}" target="_blank" rel="noopener">Download</a>`;
+      state.pendingUpdate = result;
+      els.installUpdateBtn.hidden = false;
+      els.updateStatus.textContent = `New version ${result.latestVersion} is available. Click Update App to install and keep your fonts, logos, and exports.`;
       return;
     }
     els.updateStatus.textContent = `Version ${result.currentVersion} is current.`;
@@ -869,6 +890,38 @@ async function checkForUpdate() {
     els.updateStatus.textContent = error.message;
   } finally {
     els.updateBtn.disabled = false;
+  }
+}
+
+async function installAppUpdate() {
+  if (!state.pendingUpdate) {
+    await checkForUpdate();
+    if (!state.pendingUpdate) return;
+  }
+  if (!confirm("Update Print News Studio now? Your fonts, logos, exports, and settings will stay.")) return;
+  els.updateBtn.disabled = true;
+  els.installUpdateBtn.disabled = true;
+  els.updateStatus.textContent = "Downloading and installing update...";
+  try {
+    const result = await api("/api/update-install", { method: "POST", body: "{}" });
+    els.updateStatus.textContent = result.message || "Update is installing. The app will close and reopen.";
+  } catch (error) {
+    els.updateStatus.textContent = error.message;
+    els.updateBtn.disabled = false;
+    els.installUpdateBtn.disabled = false;
+  }
+}
+
+async function shutdownApp() {
+  if (!confirm("Turn off Print News Studio? Open PrintNewsStudio.exe again when you want to restart.")) return;
+  els.shutdownBtn.disabled = true;
+  els.updateStatus.textContent = "Turning off Print News Studio...";
+  try {
+    const result = await api("/api/shutdown", { method: "POST", body: "{}" });
+    els.updateStatus.textContent = result.message || "Print News Studio is turning off.";
+  } catch (error) {
+    els.updateStatus.textContent = error.message;
+    els.shutdownBtn.disabled = false;
   }
 }
 
@@ -956,7 +1009,9 @@ function renderItems() {
     item.title = titleText(item);
     titleInput.innerHTML = item.titleHtml;
     if (typeof item.subTextOpen !== "boolean") item.subTextOpen = false;
-    subTextInput.value = item.subText || "";
+    item.subTextHtml = subTextHtml(item);
+    item.subText = subTextValue(item);
+    subTextInput.innerHTML = item.subTextHtml;
     subTextInput.hidden = !item.subTextOpen;
     subTextToggle.classList.toggle("active", item.subTextOpen);
     linkInput.value = item.link;
@@ -989,13 +1044,13 @@ function renderItems() {
     titleInput.addEventListener("beforeinput", (event) => {
       if (event.inputType !== "formatBold") return;
       event.preventDefault();
-      applyTitleHighlight(titleInput);
+      applyRichHighlight(titleInput);
       updateTitleFromInput(titleInput, item, itemPreview, index, true);
     });
     titleInput.addEventListener("keydown", (event) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
       event.preventDefault();
-      applyTitleHighlight(titleInput);
+      applyRichHighlight(titleInput);
       updateTitleFromInput(titleInput, item, itemPreview, index, true);
     });
     titleInput.addEventListener("paste", (event) => {
@@ -1015,8 +1070,25 @@ function renderItems() {
       render();
     });
     subTextInput.addEventListener("input", () => {
-      item.subText = subTextInput.value;
-      itemPreview.innerHTML = renderItemPreviewHtml(item, index);
+      updateSubTextFromInput(subTextInput, item, itemPreview, index, /font-weight|<b\b|<strong\b/i.test(subTextInput.innerHTML));
+    });
+    subTextInput.addEventListener("beforeinput", (event) => {
+      if (event.inputType !== "formatBold") return;
+      event.preventDefault();
+      applyRichHighlight(subTextInput);
+      updateSubTextFromInput(subTextInput, item, itemPreview, index, true);
+    });
+    subTextInput.addEventListener("keydown", (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "b") return;
+      event.preventDefault();
+      applyRichHighlight(subTextInput);
+      updateSubTextFromInput(subTextInput, item, itemPreview, index, true);
+    });
+    subTextInput.addEventListener("paste", (event) => {
+      pasteIntoTitle(event);
+      window.setTimeout(() => {
+        updateSubTextFromInput(subTextInput, item, itemPreview, index, true);
+      }, 0);
     });
     linkInput.addEventListener("input", () => {
       item.link = linkInput.value;
@@ -1084,7 +1156,8 @@ function commitItemFromCard(item, node) {
   item.date = formatDisplayDate(dateInput.value);
   item.titleHtml = sanitizeRichHtml(titleInput.innerHTML);
   item.title = titleText(item);
-  item.subText = String(subTextInput?.value || "").trim();
+  item.subTextHtml = sanitizeRichHtml(subTextInput?.innerHTML || "");
+  item.subText = subTextValue(item);
   item.subTextOpen = Boolean(subTextInput && !subTextInput.hidden);
   item.link = normalizeLink(linkInput.value);
 }
@@ -1103,7 +1176,7 @@ function renderItemPreviewHtml(item, index) {
   const offset = logoOffset(item);
   const bg = newsBackground(item, index);
   const subText = subTextValue(item);
-  const subTextHtml = subText ? `<p class="preview-subtext">${escapeHtml(subText)}</p>` : "";
+  const subTextPreviewHtml = subText ? `<p class="preview-subtext">${renderSubTextHtml(item)}</p>` : "";
   const logoHtml = logo
     ? `<img src="${logo.url}" alt="${escapeHtml(label)} logo" style="transform: translate(${offset.x}px, ${offset.y}px) scale(${offset.scale})">`
     : `<a class="preview-search-logo" href="${missingLogoSearchUrl(source)}" target="_blank" rel="noopener">Search Logo</a>`;
@@ -1119,7 +1192,7 @@ function renderItemPreviewHtml(item, index) {
         </div>
       </div>
       <h3 class="preview-title" style="font-family: ${escapeHtml(headlineFontStack(item, index))}">${renderTitleHtml(item) || "Untitled headline"}</h3>
-      ${subTextHtml}
+      ${subTextPreviewHtml}
     </article>
   `;
 }
@@ -1230,6 +1303,7 @@ function exportItems() {
     title: titleText(item),
     titleHtml: titleHtml(item),
     subText: subTextValue(item),
+    subTextHtml: subTextHtml(item),
     link: item.link,
     source: sourceLabel(item)
   }));
@@ -1336,6 +1410,31 @@ function headlineSegments(item) {
   return segments;
 }
 
+function subTextSegments(item) {
+  const template = document.createElement("template");
+  template.innerHTML = renderSubTextHtml(item);
+  const segments = [];
+
+  function walk(node, bold = false) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      if (text.trim()) segments.push({ text: text.replace(/\s+/g, " "), bold });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+    const tag = node.nodeType === Node.ELEMENT_NODE ? node.tagName.toLowerCase() : "";
+    if (tag === "br") {
+      segments.push({ text: "\n", bold: false, break: true });
+      return;
+    }
+    const nextBold = bold || tag === "b" || tag === "strong";
+    node.childNodes.forEach((child) => walk(child, nextBold));
+  }
+
+  walk(template.content);
+  return segments;
+}
+
 function headlineFont(item, index) {
   return `700 48px ${headlineFontStack(item, index)}`;
 }
@@ -1411,16 +1510,70 @@ function drawHeadlineLines(ctx, lines, x, y, item, index) {
 }
 
 function subTextFont() {
-  return '400 26.4px "Times New Roman", Times, serif';
+  return '400 52.8px "Times New Roman", Times, serif';
+}
+
+function measureSubTextPart(ctx, text) {
+  ctx.font = subTextFont();
+  return ctx.measureText(text).width;
+}
+
+function wrapSubTextSegments(ctx, segments, maxWidth) {
+  const lines = [];
+  let tokens = [];
+  for (const segment of segments) {
+    if (segment.break) {
+      if (tokens.length) lines.push(wrapSubTextTokens(ctx, tokens, maxWidth));
+      tokens = [];
+      continue;
+    }
+    normalizeWhitespace(segment.text).split(" ").filter(Boolean).forEach((word) => {
+      tokens.push({ text: word, bold: segment.bold });
+    });
+  }
+  if (tokens.length) lines.push(wrapSubTextTokens(ctx, tokens, maxWidth));
+  return lines.flat();
+}
+
+function wrapSubTextTokens(ctx, tokens, maxWidth) {
+  const lines = [];
+  let line = [];
+  let width = 0;
+
+  for (const token of tokens) {
+    const text = line.length ? ` ${token.text}` : token.text;
+    const partWidth = measureSubTextPart(ctx, text);
+    if (line.length && width + partWidth > maxWidth) {
+      lines.push(line);
+      line = [{ ...token, text: token.text }];
+      width = measureSubTextPart(ctx, token.text);
+    } else {
+      line.push({ ...token, text });
+      width += partWidth;
+    }
+  }
+
+  if (line.length) lines.push(line);
+  return lines;
 }
 
 function drawSubTextLines(ctx, lines, x, y) {
   ctx.textBaseline = "top";
   ctx.font = subTextFont();
-  ctx.fillStyle = "#000000";
   for (const line of lines) {
-    ctx.fillText(line, x, y);
-    y += 34;
+    let xText = x;
+    for (const part of line) {
+      const width = measureSubTextPart(ctx, part.text);
+      if (part.bold) {
+        ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
+        drawRoundRect(ctx, xText - 4, y - 4, width + 8, 62, 4);
+        ctx.fill();
+      }
+      ctx.fillStyle = "#000000";
+      ctx.fillText(part.text, xText, y);
+      xText += width;
+    }
+    y += 64;
   }
 }
 
@@ -1499,9 +1652,9 @@ async function renderItemPng(item, index) {
   const metaWidth = logoWidth + 20 + dateWidth + 10 + sourceWidth;
   const finalWidth = Math.ceil(Math.max(800, maxLineWidth + 45, metaWidth + 45));
   ctx.font = subTextFont();
-  const subTextLines = subTextValue(item) ? wrapCanvasText(ctx, subTextValue(item), finalWidth - 40, "") : [];
+  const subTextLines = subTextValue(item) ? wrapSubTextSegments(ctx, subTextSegments(item), finalWidth - 40) : [];
   const textHeight = lines.length * 58;
-  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 34 : 0;
+  const subTextHeight = subTextLines.length ? 14 + subTextLines.length * 64 : 0;
   const finalHeight = 20 + logoHeight + 20 + textHeight + subTextHeight + 20;
 
   canvas.width = finalWidth;
@@ -1639,6 +1792,8 @@ async function renderPngZip() {
 els.parseBtn.addEventListener("click", createItemsFromPaste);
 els.addEmptyBtn.addEventListener("click", addEmptyItem);
 els.updateBtn.addEventListener("click", checkForUpdate);
+els.installUpdateBtn.addEventListener("click", installAppUpdate);
+els.shutdownBtn.addEventListener("click", shutdownApp);
 els.excelPaste.addEventListener("input", renderPastePreview);
 els.sampleBtn.addEventListener("click", () => {
   els.excelPaste.value = sampleText();
