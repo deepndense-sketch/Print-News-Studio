@@ -33,6 +33,7 @@ const els = {
   exportFolderInput: document.querySelector("#exportFolderInput"),
   saveExportFolderBtn: document.querySelector("#saveExportFolderBtn"),
   openExportFolderBtn: document.querySelector("#openExportFolderBtn"),
+  logoSummary: document.querySelector("#logoSummary"),
   newsColorMode: document.querySelector("#newsColorMode"),
   aulaceseFontSelect: document.querySelector("#aulaceseFontSelect"),
   englishFontSelect: document.querySelector("#englishFontSelect"),
@@ -950,6 +951,8 @@ function render() {
 }
 
 function renderLogoSummary() {
+  if (!els.logoSummary) return;
+
   const sources = [...new Map(state.items.map((item) => [sourceName(item), sourceName(item)])).values()]
     .filter((source) => source && source !== "Unknown")
     .sort((a, b) => sourceDisplayName(a).localeCompare(sourceDisplayName(b)));
