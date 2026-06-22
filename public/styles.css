@@ -8,6 +8,8 @@
   --soft: #eef4f8;
   --primary: #175c68;
   --primary-strong: #0f414a;
+  --success: #1f7a3a;
+  --success-strong: #155c2a;
   --danger: #9b3b2f;
   --shadow: 0 12px 28px rgba(31, 35, 40, 0.08);
 }
@@ -58,6 +60,17 @@ button.primary {
 
 button.primary:hover {
   background: var(--primary-strong);
+}
+
+button.update-ready {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+  font-weight: 800;
+}
+
+button.update-ready:hover {
+  background: var(--success-strong);
 }
 
 button.ghost {
@@ -160,6 +173,19 @@ h2 {
   max-width: 100%;
   margin-top: -12px;
   text-align: right;
+}
+
+.update-status.available {
+  color: var(--success);
+  font-weight: 800;
+}
+
+.update-status.current {
+  color: var(--muted);
+}
+
+.update-status.error {
+  color: var(--danger);
 }
 
 .shell {

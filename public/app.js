@@ -878,22 +878,29 @@ async function chooseFontFolder() {
 async function checkForUpdate() {
   els.updateBtn.disabled = true;
   els.installUpdateBtn.hidden = true;
+  els.installUpdateBtn.classList.remove("update-ready");
   state.pendingUpdate = null;
+  els.updateStatus.className = "status update-status checking";
   els.updateStatus.textContent = "Checking update...";
   try {
     const result = await api("/api/update-check");
     if (result.error) {
+      els.updateStatus.className = "status update-status error";
       els.updateStatus.textContent = `Version ${result.currentVersion}. Could not check update.`;
       return;
     }
     if (result.updateAvailable) {
       state.pendingUpdate = result;
       els.installUpdateBtn.hidden = false;
-      els.updateStatus.textContent = `New version ${result.latestVersion} is available. Click Update App to install and keep your fonts, logos, and exports.`;
+      els.installUpdateBtn.classList.add("update-ready");
+      els.updateStatus.className = "status update-status available";
+      els.updateStatus.textContent = `New version ${result.latestVersion} is available.`;
       return;
     }
-    els.updateStatus.textContent = `Version ${result.currentVersion} is current.`;
+    els.updateStatus.className = "status update-status current";
+    els.updateStatus.textContent = `Up to date: version ${result.currentVersion}.`;
   } catch (error) {
+    els.updateStatus.className = "status update-status error";
     els.updateStatus.textContent = error.message;
   } finally {
     els.updateBtn.disabled = false;
@@ -1909,3 +1916,5 @@ loadLogos().catch((error) => {
   els.parseStatus.textContent = error.message;
   render();
 });
+
+checkForUpdate();
