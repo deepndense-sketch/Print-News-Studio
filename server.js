@@ -87,8 +87,7 @@ function missingLogoNoteName(name) {
 }
 
 function preferredLogoName(name) {
-  const preferred = missingLogoNoteName(String(name || "Unknown").trim());
-  return cleanLogoName(preferred || name);
+  return cleanLogoName(String(name || "Unknown").trim());
 }
 
 function safeJoin(base, target) {
@@ -658,6 +657,27 @@ function listLogos() {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
+function isLogoFile(file) {
+  return /\.(png|jpe?g|jfif|webp|svg|gif|bmp|ico|tiff?)$/i.test(String(file || ""));
+}
+
+function logoResponseForFile(file, cacheBust = false) {
+  const parsed = path.parse(file);
+  return {
+    key: parsed.name,
+    file,
+    url: `/logos/${encodeURIComponent(file)}${cacheBust ? `?t=${Date.now()}` : ""}`
+  };
+}
+
+function findLogoFileByKey(key) {
+  const lookup = String(key || "").trim().toLowerCase();
+  if (!lookup) return "";
+  return fs.readdirSync(LOGO_DIR)
+    .filter(isLogoFile)
+    .find((file) => path.parse(file).name.toLowerCase() === lookup) || "";
+}
+
 function listFonts() {
   ensureFolders();
   const fontFolder = currentFontFolder();
@@ -876,6 +896,51 @@ async function routeApi(req, res, url) {
       file,
       url: `/logos/${encodeURIComponent(file)}?t=${Date.now()}`
     });
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/logo-rename") {
+    const body = JSON.parse(await readBody(req));
+    const source = String(body.source || "").trim();
+    const file = path.basename(String(body.file || "").trim());
+    const targetKey = preferredLogoName(source);
+
+    if (!source || !targetKey) {
+      sendJson(res, 400, { error: "Source name is required before renaming a logo." });
+      return true;
+    }
+    if (!file || !isLogoFile(file)) {
+      sendJson(res, 400, { error: "Choose a saved logo to rename." });
+      return true;
+    }
+
+    const oldPath = safeJoin(LOGO_DIR, file);
+    if (!oldPath || !fs.existsSync(oldPath) || fs.statSync(oldPath).isDirectory()) {
+      sendJson(res, 404, { error: "Saved logo was not found." });
+      return true;
+    }
+
+    const oldKey = path.parse(file).name;
+    if (oldKey.toLowerCase() === targetKey.toLowerCase()) {
+      sendJson(res, 200, logoResponseForFile(file, true));
+      return true;
+    }
+
+    const existing = findLogoFileByKey(targetKey);
+    if (existing && existing.toLowerCase() !== file.toLowerCase()) {
+      sendJson(res, 200, { ...logoResponseForFile(existing, true), alreadyExists: true });
+      return true;
+    }
+
+    const targetFile = `${targetKey}${path.extname(file)}`;
+    const targetPath = safeJoin(LOGO_DIR, targetFile);
+    if (!targetPath) {
+      sendJson(res, 400, { error: "Logo name is not safe to save." });
+      return true;
+    }
+
+    fs.renameSync(oldPath, targetPath);
+    sendJson(res, 200, logoResponseForFile(targetFile, true));
     return true;
   }
 

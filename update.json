@@ -1,6 +1,6 @@
 {
-  "version": "1.0.10",
+  "version": "1.0.11",
   "downloadUrl": "https://github.com/deepndense-sketch/Print-News-Studio/raw/main/PrintNewsStudio%20Portable.zip",
   "pageUrl": "https://github.com/deepndense-sketch/Print-News-Studio",
-  "notes": "Reduce sub text size and simplify the Turn Off button"
+  "notes": "Save new logos with full domain names and allow old logo names to be changed when needed"
 }

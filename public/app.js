@@ -513,8 +513,7 @@ function missingLogoNoteName(name) {
 }
 
 function preferredLogoName(name) {
-  const preferred = missingLogoNoteName(String(name || "Unknown").trim());
-  return preferred || String(name || "Unknown").trim();
+  return String(name || "Unknown").trim();
 }
 
 function logoNameCandidates(name) {
@@ -542,6 +541,13 @@ function logoForSource(source) {
     if (clean) return clean;
   }
   return null;
+}
+
+function logoNeedsFullName(source, logo) {
+  if (!logo) return false;
+  const expected = logoLookupKey(preferredLogoName(source));
+  const current = logoLookupKey(logo.key);
+  return expected && current && expected.includes(".") && current !== expected;
 }
 
 function sourceLogo(item) {
@@ -955,6 +961,9 @@ function renderLogoSummary() {
   els.logoSummary.innerHTML = sources.map((source) => {
     const label = sourceDisplayName(source);
     const logo = logoForSource(source);
+    const renameButton = logoNeedsFullName(source, logo)
+      ? `<button class="logo-rename" type="button" data-source="${escapeHtml(source)}" data-file="${escapeHtml(logo.file)}">Change name</button>`
+      : "";
     const icon = logo
       ? `<img src="${logo.url}" alt="${escapeHtml(label)} logo">`
       : `<div class="missing-logo">${escapeHtml(label.slice(0, 2).toUpperCase())}</div>`;
@@ -964,7 +973,7 @@ function renderLogoSummary() {
         <div>
           <strong title="${escapeHtml(label)}">${escapeHtml(label)}</strong>
           ${logo
-            ? `<span>${escapeHtml(logo.file)}</span>`
+            ? `<span>${escapeHtml(logo.file)}</span>${renameButton}`
             : `<a class="logo-search" href="${missingLogoSearchUrl(source)}" target="_blank" rel="noopener">Search logo</a>`}
         </div>
       </div>
@@ -976,6 +985,29 @@ function renderLogoSummary() {
     chip.title = "Click, then paste a logo image";
     chip.addEventListener("paste", (event) => handleLogoPasteForSource(event, chip.dataset.source));
     chip.addEventListener("click", () => chip.focus());
+  });
+
+  els.logoSummary.querySelectorAll(".logo-rename").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      button.disabled = true;
+      try {
+        const saved = await api("/api/logo-rename", {
+          method: "POST",
+          body: JSON.stringify({
+            source: button.dataset.source,
+            file: button.dataset.file
+          })
+        });
+        state.logos.set(logoLookupKey(saved.key), saved);
+        state.logos.set(slug(saved.key), saved);
+        await loadLogos();
+      } catch (error) {
+        alert(error.message);
+        button.disabled = false;
+      }
+    });
   });
 }
 
