@@ -946,6 +946,7 @@ async function loadLogos() {
 
 function render() {
   renderItems();
+  renderLogoSummary();
 }
 
 function renderLogoSummary() {
