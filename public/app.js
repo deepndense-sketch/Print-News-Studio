@@ -205,45 +205,98 @@ function escapeHtml(value) {
 function sanitizeRichHtml(html) {
   const template = document.createElement("template");
   template.innerHTML = String(html || "");
-  const output = document.createElement("div");
+  return richSegmentsToHtml(richSegmentsFromNode(template.content));
+}
 
-  function cleanNode(node, inheritedBold = false) {
+function isBoldNode(node, inheritedBold = false) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return inheritedBold;
+  const tag = node.tagName.toLowerCase();
+  const styleWeight = String(node.style?.fontWeight || node.getAttribute("style") || "").toLowerCase();
+  return inheritedBold
+    || tag === "b"
+    || tag === "strong"
+    || /font-weight\s*:\s*(bold|[6-9]00)/i.test(styleWeight)
+    || /^(bold|[6-9]00)$/i.test(styleWeight.trim());
+}
+
+function pushRichSegment(segments, text, bold) {
+  if (!text) return;
+  const last = segments[segments.length - 1];
+  if (last && last.bold === bold) {
+    last.text += text;
+  } else {
+    segments.push({ text, bold });
+  }
+}
+
+function richSegmentsFromNode(root) {
+  const segments = [];
+
+  function walk(node, inheritedBold = false) {
     if (node.nodeType === Node.TEXT_NODE) {
-      return document.createTextNode(node.textContent || "");
+      pushRichSegment(segments, node.textContent || "", inheritedBold);
+      return;
     }
 
     if (node.nodeType !== Node.ELEMENT_NODE) {
-      return document.createDocumentFragment();
+      if (node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
+        node.childNodes.forEach((child) => walk(child, inheritedBold));
+      }
+      return;
     }
 
     const tag = node.tagName.toLowerCase();
     if (["script", "style", "iframe", "object", "embed"].includes(tag)) {
-      return document.createDocumentFragment();
+      return;
     }
 
     if (tag === "br") {
-      return document.createTextNode(" ");
+      pushRichSegment(segments, " ", false);
+      return;
     }
 
-    const styleWeight = String(node.style?.fontWeight || node.getAttribute("style") || "").toLowerCase();
-    const isBold = inheritedBold
-      || tag === "b"
-      || tag === "strong"
-      || /font-weight\s*:\s*(bold|[6-9]00)/i.test(styleWeight)
-      || /^(bold|[6-9]00)$/i.test(styleWeight.trim());
-    const wrapper = isBold ? document.createElement("strong") : document.createDocumentFragment();
-
-    node.childNodes.forEach((child) => {
-      wrapper.appendChild(cleanNode(child, isBold));
-    });
-    return wrapper;
+    const nextBold = isBoldNode(node, inheritedBold);
+    node.childNodes.forEach((child) => walk(child, nextBold));
   }
 
-  template.content.childNodes.forEach((node) => {
-    output.appendChild(cleanNode(node));
-  });
+  walk(root);
+  return segments;
+}
 
-  return output.innerHTML.replace(/\s+/g, " ").trim();
+function normalizeRichSegments(segments) {
+  const normalized = [];
+  let pendingSpace = false;
+  let pendingSpaceBold = false;
+
+  for (const segment of segments) {
+    const parts = String(segment.text || "").match(/\S+|\s+/g) || [];
+    for (const part of parts) {
+      if (/^\s+$/.test(part)) {
+        if (normalized.length && !pendingSpace) {
+          pendingSpace = true;
+          pendingSpaceBold = segment.bold;
+        }
+        continue;
+      }
+
+      if (pendingSpace && normalized.length) {
+        pushRichSegment(normalized, " ", pendingSpaceBold);
+      }
+      pendingSpace = false;
+      pushRichSegment(normalized, part, segment.bold);
+    }
+  }
+
+  return normalized;
+}
+
+function richSegmentsToHtml(segments) {
+  return normalizeRichSegments(segments)
+    .map((segment) => {
+      const text = escapeHtml(segment.text);
+      return segment.bold ? `<strong>${text}</strong>` : text;
+    })
+    .join("");
 }
 
 function plainTextFromHtml(html) {
@@ -338,17 +391,88 @@ function applyRichHighlight(editor) {
   }
 
   const range = selection.getRangeAt(0);
-  const strong = document.createElement("strong");
-  strong.appendChild(range.extractContents());
-  range.insertNode(strong);
+  const preRange = range.cloneRange();
+  preRange.selectNodeContents(editor);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const start = preRange.toString().length;
+  const end = start + range.toString().length;
+  if (end <= start) return false;
+
+  const segments = richSegmentsFromNode(editor);
+  const selected = sliceRichSegments(segments, start, end);
+  const removeHighlight = selected.some((segment) => /\S/.test(segment.text))
+    && selected.every((segment) => segment.bold || !/\S/.test(segment.text));
+  editor.innerHTML = richSegmentsToHtml(setRichHighlightRange(segments, start, end, !removeHighlight));
 
   const nextRange = document.createRange();
-  nextRange.selectNodeContents(strong);
-  nextRange.collapse(false);
+  restoreRangeByCharacterOffset(editor, end, nextRange);
+  nextRange.collapse(true);
   selection.removeAllRanges();
   selection.addRange(nextRange);
-  normalizeRichEditor(editor);
   return true;
+}
+
+function sliceRichSegments(segments, start, end) {
+  const output = [];
+  let offset = 0;
+
+  for (const segment of segments) {
+    const text = segment.text || "";
+    const segmentStart = offset;
+    const segmentEnd = offset + text.length;
+    if (segmentEnd > start && segmentStart < end) {
+      const from = Math.max(start, segmentStart) - segmentStart;
+      const to = Math.min(end, segmentEnd) - segmentStart;
+      pushRichSegment(output, text.slice(from, to), segment.bold);
+    }
+    offset = segmentEnd;
+  }
+
+  return output;
+}
+
+function setRichHighlightRange(segments, start, end, highlighted) {
+  const output = [];
+  let offset = 0;
+
+  for (const segment of segments) {
+    const text = segment.text || "";
+    const segmentStart = offset;
+    const segmentEnd = offset + text.length;
+    if (segmentEnd <= start || segmentStart >= end) {
+      pushRichSegment(output, text, segment.bold);
+    } else {
+      const before = Math.max(0, start - segmentStart);
+      const after = Math.max(0, segmentEnd - end);
+      const middleStart = before;
+      const middleEnd = text.length - after;
+      pushRichSegment(output, text.slice(0, before), segment.bold);
+      pushRichSegment(output, text.slice(middleStart, middleEnd), highlighted);
+      pushRichSegment(output, text.slice(middleEnd), segment.bold);
+    }
+    offset = segmentEnd;
+  }
+
+  return output;
+}
+
+function restoreRangeByCharacterOffset(element, offset, range) {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let remaining = offset;
+  let node = walker.nextNode();
+
+  while (node) {
+    const length = node.textContent.length;
+    if (remaining <= length) {
+      range.setStart(node, remaining);
+      return;
+    }
+    remaining -= length;
+    node = walker.nextNode();
+  }
+
+  range.selectNodeContents(element);
+  range.collapse(false);
 }
 
 function updateTitleFromInput(titleInput, item, itemPreview, index, normalizeEditor = false) {
@@ -1403,10 +1527,11 @@ function firstWords(value, count) {
 }
 
 function pngFilename(item) {
+  const number = fileSafePart(item.number, "");
   const date = fileSafePart(item.date, "undated");
   const headline = fileSafePart(firstWords(titleText(item), 10), "untitled");
   const source = fileSafePart(sourceLabel(item), "source");
-  return `${date} ${headline} (${source}).png`;
+  return `${number ? `${number} ` : ""}${date} ${headline} (${source}).png`;
 }
 
 function wrapCanvasText(ctx, text, maxWidth, fallback = "Untitled headline") {
@@ -1537,19 +1662,43 @@ function drawHeadlineLines(ctx, lines, x, y, item, index) {
   ctx.font = headlineFont(item, index);
   for (const line of lines) {
     let xText = x;
+    drawHighlightRuns(ctx, line, x, y, 56, -3, 4, (part) => measureHeadlinePart(ctx, part.text, item, index));
     for (const part of line) {
       const width = measureHeadlinePart(ctx, part.text, item, index);
-      if (part.bold) {
-        ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
-        drawRoundRect(ctx, xText - 4, y - 3, width + 8, 56, 4);
-        ctx.fill();
-      }
       ctx.fillStyle = "#000000";
       ctx.fillText(part.text, xText, y);
       xText += width;
     }
     y += 58;
   }
+}
+
+function drawHighlightRuns(ctx, line, x, y, height, yOffset, radius, measurePart) {
+  let xText = x;
+  let runStart = null;
+  let runWidth = 0;
+
+  function flushRun() {
+    if (runStart == null || runWidth <= 0) return;
+    ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
+    drawRoundRect(ctx, runStart - 4, y + yOffset, runWidth + 8, height, radius);
+    ctx.fill();
+    runStart = null;
+    runWidth = 0;
+  }
+
+  for (const part of line) {
+    const width = measurePart(part);
+    if (part.bold) {
+      if (runStart == null) runStart = xText;
+      runWidth += width;
+    } else {
+      flushRun();
+    }
+    xText += width;
+  }
+
+  flushRun();
 }
 
 function subTextFont() {
@@ -1605,13 +1754,9 @@ function drawSubTextLines(ctx, lines, x, y) {
   ctx.font = subTextFont();
   for (const line of lines) {
     let xText = x;
+    drawHighlightRuns(ctx, line, x, y, 50, -4, 4, (part) => measureSubTextPart(ctx, part.text));
     for (const part of line) {
       const width = measureSubTextPart(ctx, part.text);
-      if (part.bold) {
-        ctx.fillStyle = "rgba(255, 241, 118, 0.82)";
-        drawRoundRect(ctx, xText - 4, y - 4, width + 8, 50, 4);
-        ctx.fill();
-      }
       ctx.fillStyle = "#000000";
       ctx.fillText(part.text, xText, y);
       xText += width;
