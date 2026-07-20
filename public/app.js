@@ -17,6 +17,7 @@ const els = {
   parseBtn: document.querySelector("#parseBtn"),
   sampleBtn: document.querySelector("#sampleBtn"),
   addEmptyBtn: document.querySelector("#addEmptyBtn"),
+  priorityNewsBtn: document.querySelector("#priorityNewsBtn"),
   parseStatus: document.querySelector("#parseStatus"),
   itemsEmpty: document.querySelector("#itemsEmpty"),
   itemsList: document.querySelector("#itemsList"),
@@ -626,6 +627,15 @@ function sourceLabel(item) {
   return sourceDisplayName(sourceName(item));
 }
 
+function priorityNewsItems() {
+  return state.items.map((item) => ({
+    number: item.number,
+    headline: titleText(item),
+    link: item.link,
+    source: sourceName(item)
+  }));
+}
+
 function baseLogoName(name) {
   const cleaned = String(name || "Unknown").trim();
   return cleaned.includes(".") ? cleaned.split(".", 1)[0] : cleaned;
@@ -916,6 +926,46 @@ async function openExportFolder() {
   const settings = await saveExportFolder(true);
   await api("/api/open-export-folder", { method: "POST", body: "{}" });
   els.exportStatus.textContent = `Opened folder: ${settings.exportFolder}`;
+}
+
+function showPriorityNewsStatus(status, announce = false) {
+  const configured = Boolean(status?.configured);
+  els.priorityNewsBtn.classList.toggle("priority-active", configured);
+  els.priorityNewsBtn.textContent = configured ? "Priority List Active" : "Priority News List";
+  els.priorityNewsBtn.title = configured
+    ? `${status.filePath}\n${status.count} news item${status.count === 1 ? "" : "s"} saved this session. Click to change the Word file location.`
+    : "Choose where to save this session's Word list";
+
+  if (announce && configured) {
+    els.parseStatus.textContent = `Priority News List: ${status.fileName} (${status.count} news item${status.count === 1 ? "" : "s"}).`;
+  }
+}
+
+async function loadPriorityNewsStatus() {
+  showPriorityNewsStatus(await api("/api/priority-news/status"));
+}
+
+async function choosePriorityNewsFile() {
+  els.priorityNewsBtn.disabled = true;
+  els.parseStatus.textContent = "Choose where to save the Priority News List Word file...";
+  try {
+    const status = await api("/api/priority-news/choose", {
+      method: "POST",
+      body: "{}"
+    });
+    if (status.canceled) {
+      els.parseStatus.textContent = status.configured
+        ? `Priority News List remains active: ${status.fileName}.`
+        : "Priority News List location was not selected.";
+      showPriorityNewsStatus(status);
+      return;
+    }
+    showPriorityNewsStatus(status, true);
+  } catch (error) {
+    els.parseStatus.textContent = error.message;
+  } finally {
+    els.priorityNewsBtn.disabled = false;
+  }
 }
 
 async function saveFontFolder(silent = false) {
@@ -1928,7 +1978,7 @@ async function renderPngList() {
     const images = await renderCurrentImages();
     const result = await api("/api/png-export", {
       method: "POST",
-      body: JSON.stringify({ images })
+      body: JSON.stringify({ images, priorityNews: priorityNewsItems() })
     });
     const missing = missingLogoEntries();
     let missingNote = "";
@@ -1939,7 +1989,14 @@ async function renderPngList() {
       });
       missingNote = ` Missing logos: ${missing.map((entry) => `<a href="${entry.searchUrl}" target="_blank" rel="noopener">${escapeHtml(entry.name)}</a>`).join(" ")}`;
     }
-    els.exportStatus.innerHTML = `${result.count} PNG files saved to <strong>${escapeHtml(result.exportFolder)}</strong>. ${result.files.map(savedFileHtml).join(" ")}${missingNote}`;
+    let priorityNote = "";
+    if (result.priorityNews?.configured) {
+      showPriorityNewsStatus(result.priorityNews);
+      priorityNote = result.priorityNews.error
+        ? ` <strong>Priority News List could not be updated:</strong> ${escapeHtml(result.priorityNews.error)}`
+        : ` ${result.priorityNews.added} news item${result.priorityNews.added === 1 ? "" : "s"} added to <strong>${escapeHtml(result.priorityNews.fileName)}</strong>.`;
+    }
+    els.exportStatus.innerHTML = `${result.count} PNG files saved to <strong>${escapeHtml(result.exportFolder)}</strong>. ${result.files.map(savedFileHtml).join(" ")}${priorityNote}${missingNote}`;
   } catch (error) {
     els.exportStatus.textContent = error.message;
   } finally {
@@ -1979,6 +2036,7 @@ async function renderPngZip() {
 
 els.parseBtn.addEventListener("click", createItemsFromPaste);
 els.addEmptyBtn.addEventListener("click", addEmptyItem);
+els.priorityNewsBtn.addEventListener("click", choosePriorityNewsFile);
 els.updateBtn.addEventListener("click", checkForUpdate);
 els.installUpdateBtn.addEventListener("click", installAppUpdate);
 els.shutdownBtn.addEventListener("click", shutdownApp);
@@ -2045,6 +2103,10 @@ els.openFontFolderBtn.addEventListener("click", () => {
 
 loadSettings().catch((error) => {
   els.exportStatus.textContent = error.message;
+});
+
+loadPriorityNewsStatus().catch((error) => {
+  els.parseStatus.textContent = error.message;
 });
 
 loadFonts()

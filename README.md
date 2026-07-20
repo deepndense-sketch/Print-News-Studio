@@ -36,13 +36,24 @@ The portable launcher starts at port `4862`. If that port is already busy on a u
 
 1. Copy rows from Excel.
 2. Paste into the Excel paste box.
-3. Use Add empty list when you want to start with one blank news section.
-4. Check generated news sections.
-5. Paste missing source logos into the logo boxes.
-6. Edit text directly. Bold text is highlighted light yellow without adding extra weight.
-7. Use Sub Text for a smaller Times New Roman line under the headline.
-8. Choose the Location folder in Preview and export.
-9. Render the PNG list or ZIP.
+3. Optionally click Priority News List and choose where to save this session's Word file.
+4. Use Add empty list when you want to start with one blank news section.
+5. Check generated news sections.
+6. Paste missing source logos into the logo boxes.
+7. Edit text directly. Bold text is highlighted light yellow without adding extra weight.
+8. Use Sub Text for a smaller Times New Roman line under the headline.
+9. Choose the Location folder in Preview and export.
+10. Render the PNG list or ZIP.
+
+## Priority News List
+
+The Priority News List button creates a Word `.docx` at a location chosen by the user. The selected file and its accumulated entries remain active until Print News Studio is closed. Every item successfully saved by Render PNG List is added as:
+
+```text
+#202002 Iran military announces halt to operation against Israel (The Straits Times)
+```
+
+The complete line is Times New Roman 22 pt, and only `#202002` is bold. Reopening the location button during the same session writes the accumulated list to the newly selected file.
 
 ## Fonts
 

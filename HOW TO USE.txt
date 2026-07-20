@@ -1,0 +1,30 @@
+Print News Studio
+
+1. Double-click PrintNewsStudio.exe.
+2. Paste the news rows from Excel.
+3. Click Create News Sections.
+4. To keep a Word list for this app session, click Priority News List and choose where to save the .docx file.
+5. Click Add empty list if you want to start with one blank news section.
+6. Check or edit the news list and logos.
+7. Bold text becomes light yellow highlight.
+8. Use Sub Text to add a smaller Times New Roman line under a headline.
+9. The app already includes several headline fonts.
+10. Aulacese starts with BarlowCondensed-Bold, and English starts with Poppins-Bold.
+11. To use another font folder, click Choose next to Fonts or paste its folder path, then click Save.
+12. Click Folder next to Fonts to open the saved font folder.
+13. Copy .ttf, .otf, .woff, or .woff2 files there, then click Save again or reopen the app.
+14. Choose Aulacese and English headline fonts in Edit news list.
+15. In Preview and export, choose the Location folder.
+16. Click Save Folder if you changed it.
+17. Click Render PNG List or Render ZIP.
+
+When Priority News List is active, every news item successfully saved by Render PNG List is also added to the selected Word file. The list stays active until Print News Studio closes. Its text is Times New Roman 22 pt, and only the #newsnumber is bold.
+
+The app saves PNG and ZIP files to the Location folder shown inside the app.
+If you leave the folder as the default, it uses data\exports inside this portable app folder.
+The browser address usually starts with http://localhost:4862. If that number is busy, the app may open 4863 or another nearby number automatically.
+
+Logo files are kept in data\logos inside this portable app folder.
+Font files are kept in data\fonts inside this portable app folder.
+Use Check Update to see if a newer portable ZIP is available on GitHub.
+No separate install is needed.

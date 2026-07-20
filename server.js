@@ -18,6 +18,10 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const UPDATE_DIR = path.join(DATA_DIR, "updates");
 const APP_VERSION = packageInfo.version || "0.0.0";
 const UPDATE_INFO_URL = "https://raw.githubusercontent.com/deepndense-sketch/Print-News-Studio/main/update.json";
+const priorityNewsSession = {
+  filePath: "",
+  entries: []
+};
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -215,6 +219,47 @@ function chooseFolderInWindows(startFolder) {
       script
     ], {
       env: { ...process.env, PRINT_NEWS_START_FOLDER: startFolder || "" },
+      windowsHide: false
+    }, (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(cleanFolderInput(stdout));
+    });
+  });
+}
+
+function priorityNewsDefaultPath() {
+  const date = new Date().toISOString().slice(0, 10);
+  return path.join(currentExportFolder(), `Priority News List ${date}.docx`);
+}
+
+function choosePriorityNewsFileInWindows(startPath) {
+  const script = [
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$dialog = New-Object System.Windows.Forms.SaveFileDialog",
+    "$dialog.Title = 'Save Priority News List for this session'",
+    "$dialog.Filter = 'Word document (*.docx)|*.docx'",
+    "$dialog.DefaultExt = 'docx'",
+    "$dialog.AddExtension = $true",
+    "$dialog.OverwritePrompt = $true",
+    "$start = $env:PRINT_NEWS_WORD_FILE",
+    "if ($start) { $dialog.InitialDirectory = [System.IO.Path]::GetDirectoryName($start); $dialog.FileName = [System.IO.Path]::GetFileName($start) }",
+    "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.FileName }"
+  ].join("; ");
+
+  return new Promise((resolve, reject) => {
+    execFile("powershell.exe", [
+      "-NoProfile",
+      "-STA",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script
+    ], {
+      env: { ...process.env, PRINT_NEWS_WORD_FILE: startPath || priorityNewsDefaultPath() },
       windowsHide: false
     }, (error, stdout) => {
       if (error) {
@@ -640,6 +685,209 @@ function createZip(files) {
   return Buffer.concat([...localParts, ...centralParts, end]);
 }
 
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function prioritySourceName(link, fallback = "") {
+  let hostname = "";
+  try {
+    const normalized = /^[a-z][a-z0-9+.-]*:\/\//i.test(String(link || ""))
+      ? String(link)
+      : `https://${String(link || "")}`;
+    hostname = new URL(normalized).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    hostname = "";
+  }
+
+  const knownNames = {
+    "straitstimes.com": "The Straits Times",
+    "1lurer.am": "1Lurer",
+    "themoscowtimes.com": "The Moscow Times"
+  };
+  if (knownNames[hostname]) return knownNames[hostname];
+
+  const fallbackName = String(fallback || "Unknown")
+    .replace(/^\(+|\)+$/g, "")
+    .trim();
+  return hostname || fallbackName || "Unknown";
+}
+
+function cleanPriorityText(value) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePriorityNewsEntry(entry) {
+  return {
+    number: cleanPriorityText(entry?.number).replace(/^#+/, ""),
+    headline: cleanPriorityText(entry?.headline || entry?.title),
+    source: cleanPriorityText(prioritySourceName(entry?.link, entry?.source))
+  };
+}
+
+function priorityNewsDocumentXml(entries) {
+  const paragraphs = entries.map((rawEntry) => {
+    const entry = normalizePriorityNewsEntry(rawEntry);
+    const number = xmlEscape(`#${entry.number}`);
+    const details = xmlEscape(` ${entry.headline} (${entry.source})`);
+    return [
+      "<w:p>",
+      '<w:pPr><w:spacing w:after="0"/></w:pPr>',
+      "<w:r>",
+      '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:b/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr>',
+      `<w:t xml:space="preserve">${number}</w:t>`,
+      "</w:r>",
+      "<w:r>",
+      '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr>',
+      `<w:t xml:space="preserve">${details}</w:t>`,
+      "</w:r>",
+      "</w:p>"
+    ].join("");
+  }).join("");
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+    `<w:body>${paragraphs}`,
+    '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>',
+    "</w:body></w:document>"
+  ].join("");
+}
+
+function createPriorityNewsDocx(entries) {
+  const created = new Date().toISOString();
+  const files = [
+    {
+      name: "[Content_Types].xml",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+        '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+        '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>' +
+        "</Types>",
+        "utf8"
+      )
+    },
+    {
+      name: "_rels/.rels",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+        '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>' +
+        "</Relationships>",
+        "utf8"
+      )
+    },
+    {
+      name: "word/_rels/document.xml.rels",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+        "</Relationships>",
+        "utf8"
+      )
+    },
+    {
+      name: "word/document.xml",
+      buffer: Buffer.from(priorityNewsDocumentXml(entries), "utf8")
+    },
+    {
+      name: "word/styles.xml",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+        '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
+        "</w:styles>",
+        "utf8"
+      )
+    },
+    {
+      name: "docProps/core.xml",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+        '<dc:title>Priority News List</dc:title><dc:creator>Print News Studio</dc:creator><cp:lastModifiedBy>Print News Studio</cp:lastModifiedBy>' +
+        `<dcterms:created xsi:type="dcterms:W3CDTF">${created}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${created}</dcterms:modified>` +
+        "</cp:coreProperties>",
+        "utf8"
+      )
+    },
+    {
+      name: "docProps/app.xml",
+      buffer: Buffer.from(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Print News Studio</Application></Properties>',
+        "utf8"
+      )
+    }
+  ];
+  return createZip(files);
+}
+
+function writePriorityNewsDocument(filePath, entries) {
+  const target = path.resolve(filePath);
+  const folder = path.dirname(target);
+  fs.mkdirSync(folder, { recursive: true });
+
+  const token = `${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const temporary = path.join(folder, `.${path.basename(target)}.${token}.tmp`);
+  const backup = path.join(folder, `.${path.basename(target)}.${token}.bak`);
+  fs.writeFileSync(temporary, createPriorityNewsDocx(entries));
+
+  let movedOriginal = false;
+  try {
+    if (fs.existsSync(target)) {
+      fs.renameSync(target, backup);
+      movedOriginal = true;
+    }
+    fs.renameSync(temporary, target);
+    if (movedOriginal && fs.existsSync(backup)) fs.rmSync(backup);
+  } catch (error) {
+    if (!fs.existsSync(target) && movedOriginal && fs.existsSync(backup)) {
+      fs.renameSync(backup, target);
+    }
+    throw error;
+  } finally {
+    if (fs.existsSync(temporary)) fs.rmSync(temporary);
+    if (fs.existsSync(backup) && fs.existsSync(target)) fs.rmSync(backup);
+  }
+}
+
+function priorityNewsStatus(extra = {}) {
+  return {
+    configured: Boolean(priorityNewsSession.filePath),
+    filePath: priorityNewsSession.filePath,
+    fileName: priorityNewsSession.filePath ? path.basename(priorityNewsSession.filePath) : "",
+    count: priorityNewsSession.entries.length,
+    ...extra
+  };
+}
+
+function appendPriorityNewsEntries(entries) {
+  if (!priorityNewsSession.filePath) return priorityNewsStatus({ added: 0 });
+  const additions = Array.isArray(entries) ? entries.map(normalizePriorityNewsEntry) : [];
+  const updated = [...priorityNewsSession.entries, ...additions];
+  writePriorityNewsDocument(priorityNewsSession.filePath, updated);
+  priorityNewsSession.entries = updated;
+  return priorityNewsStatus({ added: additions.length });
+}
+
 function listLogos() {
   ensureFolders();
   return fs.readdirSync(LOGO_DIR)
@@ -726,8 +974,10 @@ function exportPngImages(payload) {
   const exportFolder = currentExportFolder();
   const images = Array.isArray(payload.images) ? payload.images : [];
   const files = [];
+  const savedIndexes = [];
 
-  for (const image of images) {
+  for (let index = 0; index < images.length; index += 1) {
+    const image = images[index];
     const buffer = parsePngDataUrl(image.dataUrl);
     if (!buffer) continue;
 
@@ -739,12 +989,14 @@ function exportPngImages(payload) {
       url: exportUrlFor(target),
       savedFile: target
     });
+    savedIndexes.push(index);
   }
 
   return {
     count: files.length,
     files,
-    exportFolder
+    exportFolder,
+    savedIndexes
   };
 }
 
@@ -826,6 +1078,25 @@ async function routeApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/settings") {
     const body = JSON.parse(await readBody(req));
     sendJson(res, 200, saveSettings(body));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/priority-news/status") {
+    sendJson(res, 200, priorityNewsStatus());
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/priority-news/choose") {
+    const selected = await choosePriorityNewsFileInWindows(priorityNewsSession.filePath || priorityNewsDefaultPath());
+    if (!selected) {
+      sendJson(res, 200, priorityNewsStatus({ canceled: true }));
+      return true;
+    }
+
+    const selectedPath = path.extname(selected).toLowerCase() === ".docx" ? selected : `${selected}.docx`;
+    writePriorityNewsDocument(selectedPath, priorityNewsSession.entries);
+    priorityNewsSession.filePath = path.resolve(selectedPath);
+    sendJson(res, 200, priorityNewsStatus({ canceled: false }));
     return true;
   }
 
@@ -952,7 +1223,26 @@ async function routeApi(req, res, url) {
 
   if (req.method === "POST" && url.pathname === "/api/png-export") {
     const body = JSON.parse(await readBody(req, 80 * 1024 * 1024));
-    sendJson(res, 200, exportPngImages(body));
+    const result = exportPngImages(body);
+    const successfulEntries = result.savedIndexes
+      .map((index) => body.priorityNews?.[index])
+      .filter(Boolean);
+    delete result.savedIndexes;
+
+    if (priorityNewsSession.filePath) {
+      try {
+        result.priorityNews = appendPriorityNewsEntries(successfulEntries);
+      } catch (error) {
+        result.priorityNews = priorityNewsStatus({
+          added: 0,
+          error: error.message || "The Word file could not be updated."
+        });
+      }
+    } else {
+      result.priorityNews = priorityNewsStatus({ added: 0 });
+    }
+
+    sendJson(res, 200, result);
     return true;
   }
 
@@ -1035,9 +1325,22 @@ function scheduleShutdown() {
   }, 500).unref();
 }
 
-server = createServer();
-server.listen(PORT, () => {
-  console.log(`Print News Studio running at http://localhost:${PORT}`);
-  console.log(`Logos: ${LOGO_DIR}`);
-  console.log(`Exports: ${EXPORT_DIR}`);
-});
+if (require.main === module) {
+  server = createServer();
+  server.listen(PORT, () => {
+    console.log(`Print News Studio running at http://localhost:${PORT}`);
+    console.log(`Logos: ${LOGO_DIR}`);
+    console.log(`Exports: ${EXPORT_DIR}`);
+  });
+}
+
+module.exports = {
+  appendPriorityNewsEntries,
+  createPriorityNewsDocx,
+  createServer,
+  normalizePriorityNewsEntry,
+  priorityNewsDocumentXml,
+  priorityNewsStatus,
+  prioritySourceName,
+  writePriorityNewsDocument
+};
