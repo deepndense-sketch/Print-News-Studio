@@ -932,12 +932,12 @@ async function openExportFolder() {
 function showPriorityNewsStatus(status, announce = false) {
   const configured = Boolean(status?.configured);
   els.priorityNewsBtn.classList.toggle("priority-active", configured);
-  els.priorityNewsBtn.textContent = "Priority News List";
+  els.priorityNewsBtn.textContent = "Change List Path";
   els.priorityNewsPath.textContent = status?.filePath || "No Word file selected.";
   els.priorityNewsPath.title = status?.filePath || "";
   els.priorityNewsBtn.title = configured
-    ? `${status.filePath}\n${status.count} news item${status.count === 1 ? "" : "s"} saved this session. Click to change the Word file location.`
-    : "Choose where to save this session's Word list";
+    ? `${status.filePath}\n${status.count} news item${status.count === 1 ? "" : "s"} saved this session. Click to change the folder used to save the list.`
+    : "Change the folder used to save the Priority News List";
 
   if (announce && configured) {
     els.parseStatus.textContent = `Priority News List: ${status.fileName} (${status.count} news item${status.count === 1 ? "" : "s"}).`;
@@ -957,9 +957,7 @@ async function choosePriorityNewsFile() {
       body: "{}"
     });
     if (status.canceled) {
-      els.parseStatus.textContent = status.configured
-        ? `Priority News List remains active: ${status.fileName}.`
-        : "Priority News List location was not changed.";
+      els.parseStatus.textContent = "";
       showPriorityNewsStatus(status);
       return;
     }
