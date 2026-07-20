@@ -47,7 +47,7 @@ The portable launcher starts at port `4862`. If that port is already busy on a u
 
 ## Priority News List
 
-The Priority News List automatically uses `Priority News List\Priority News List YYYY-MM-DD.docx` beside the app, with its full active path shown beside Change List Path. Click that button only to choose a different location. The selected file and its accumulated entries remain active until Print News Studio is closed. Every item successfully saved by Render PNG List is added as:
+The Priority News List automatically uses a separate timestamped file such as `Priority News List\Priority News List YYYY-MM-DD HH-MM-SS.docx` beside the app, with its full active path shown beside Change List Path. Every new app session gets a different file; if a filename collision occurs, the app adds `-2`, `-3`, and so on. Click Change List Path only to choose a different location. The selected file and its accumulated entries remain active until Print News Studio is closed. Every item successfully saved by Render PNG List is added as:
 
 ```text
 #202002 Iran military announces halt to operation against Israel (The Straits Times)

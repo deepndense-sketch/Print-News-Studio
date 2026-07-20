@@ -230,11 +230,16 @@ function chooseFolderInWindows(startFolder) {
   });
 }
 
-function priorityNewsDefaultPath() {
-  const now = new Date();
-  const date = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 10);
-  const priorityNewsFolder = path.join(ROOT, "Priority News List");
-  return path.join(priorityNewsFolder, `Priority News List ${date}.docx`);
+function priorityNewsDefaultPath(
+  priorityNewsFolder = path.join(ROOT, "Priority News List"),
+  now = new Date()
+) {
+  const sessionStamp = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ")
+    .replace(/:/g, "-");
+  return uniquePath(priorityNewsFolder, `Priority News List ${sessionStamp}.docx`);
 }
 
 function choosePriorityNewsFileInWindows(startPath) {

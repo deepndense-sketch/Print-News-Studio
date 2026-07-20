@@ -41,7 +41,21 @@ test("uses the approved source names", () => {
 test("starts every session with a Priority News List folder beside the app", () => {
   const defaultPath = priorityNewsDefaultPath();
   assert.equal(path.basename(path.dirname(defaultPath)), "Priority News List");
-  assert.match(path.basename(defaultPath), /^Priority News List \d{4}-\d{2}-\d{2}\.docx$/);
+  assert.match(path.basename(defaultPath), /^Priority News List \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}(?:-\d+)?\.docx$/);
+});
+
+test("uses a numbered filename rather than replacing an existing session list", () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "print-news-session-path-"));
+  const startedAt = new Date(2026, 6, 21, 14, 35, 20);
+  try {
+    const firstPath = priorityNewsDefaultPath(folder, startedAt);
+    fs.writeFileSync(firstPath, "first session");
+    const secondPath = priorityNewsDefaultPath(folder, startedAt);
+    assert.notEqual(secondPath, firstPath);
+    assert.match(path.basename(secondPath), /-2\.docx$/);
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
 });
 
 test("normalizes number, headline, and parenthesized source safely", () => {
