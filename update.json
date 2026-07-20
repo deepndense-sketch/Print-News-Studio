@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "downloadUrl": "https://github.com/deepndense-sketch/Print-News-Studio/raw/main/PrintNewsStudio%20Portable.zip",
   "pageUrl": "https://github.com/deepndense-sketch/Print-News-Studio",
-  "notes": "Add a session Priority News List Word file that records every successfully rendered PNG item"
+  "notes": "Automatically save the Priority News List beside the app and show its active file path"
 }

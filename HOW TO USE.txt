@@ -3,7 +3,7 @@ Print News Studio
 1. Double-click PrintNewsStudio.exe.
 2. Paste the news rows from Excel.
 3. Click Create News Sections.
-4. To keep a Word list for this app session, click Priority News List and choose where to save the .docx file.
+4. Priority News List automatically saves to a Priority News List folder beside this app. Its full Word-file path appears beside the button; click the button only if you want a different location.
 5. Click Add empty list if you want to start with one blank news section.
 6. Check or edit the news list and logos.
 7. Bold text becomes light yellow highlight.
@@ -18,7 +18,7 @@ Print News Studio
 16. Click Save Folder if you changed it.
 17. Click Render PNG List or Render ZIP.
 
-When Priority News List is active, every news item successfully saved by Render PNG List is also added to the selected Word file. The list stays active until Print News Studio closes. Its text is Times New Roman 22 pt, and only the #newsnumber is bold.
+Every news item successfully saved by Render PNG List is also added to the Priority News List Word file. The list stays active until Print News Studio closes. Its text is Times New Roman 22 pt, and only the #newsnumber is bold.
 
 The app saves PNG and ZIP files to the Location folder shown inside the app.
 If you leave the folder as the default, it uses data\exports inside this portable app folder.

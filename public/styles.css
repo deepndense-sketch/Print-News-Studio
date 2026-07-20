@@ -88,6 +88,15 @@ button.priority-active:hover {
   background: var(--primary-strong);
 }
 
+.priority-news-path {
+  flex: 1 1 260px;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 button.danger,
 .remove-item {
   color: var(--danger);

@@ -7,6 +7,7 @@ const test = require("node:test");
 const {
   createPriorityNewsDocx,
   normalizePriorityNewsEntry,
+  priorityNewsDefaultPath,
   priorityNewsDocumentXml,
   prioritySourceName,
   writePriorityNewsDocument
@@ -35,6 +36,12 @@ test("uses the approved source names", () => {
   assert.equal(prioritySourceName(sampleEntries[1].link), "1Lurer");
   assert.equal(prioritySourceName(sampleEntries[2].link), "The Moscow Times");
   assert.equal(prioritySourceName("https://www.reuters.com/world/story"), "reuters.com");
+});
+
+test("starts every session with a Priority News List folder beside the app", () => {
+  const defaultPath = priorityNewsDefaultPath();
+  assert.equal(path.basename(path.dirname(defaultPath)), "Priority News List");
+  assert.match(path.basename(defaultPath), /^Priority News List \d{4}-\d{2}-\d{2}\.docx$/);
 });
 
 test("normalizes number, headline, and parenthesized source safely", () => {

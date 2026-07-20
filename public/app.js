@@ -18,6 +18,7 @@ const els = {
   sampleBtn: document.querySelector("#sampleBtn"),
   addEmptyBtn: document.querySelector("#addEmptyBtn"),
   priorityNewsBtn: document.querySelector("#priorityNewsBtn"),
+  priorityNewsPath: document.querySelector("#priorityNewsPath"),
   parseStatus: document.querySelector("#parseStatus"),
   itemsEmpty: document.querySelector("#itemsEmpty"),
   itemsList: document.querySelector("#itemsList"),
@@ -931,7 +932,9 @@ async function openExportFolder() {
 function showPriorityNewsStatus(status, announce = false) {
   const configured = Boolean(status?.configured);
   els.priorityNewsBtn.classList.toggle("priority-active", configured);
-  els.priorityNewsBtn.textContent = configured ? "Priority List Active" : "Priority News List";
+  els.priorityNewsBtn.textContent = "Priority News List";
+  els.priorityNewsPath.textContent = status?.filePath || "No Word file selected.";
+  els.priorityNewsPath.title = status?.filePath || "";
   els.priorityNewsBtn.title = configured
     ? `${status.filePath}\n${status.count} news item${status.count === 1 ? "" : "s"} saved this session. Click to change the Word file location.`
     : "Choose where to save this session's Word list";
@@ -947,7 +950,7 @@ async function loadPriorityNewsStatus() {
 
 async function choosePriorityNewsFile() {
   els.priorityNewsBtn.disabled = true;
-  els.parseStatus.textContent = "Choose where to save the Priority News List Word file...";
+  els.parseStatus.textContent = "Choose a different location for the Priority News List Word file...";
   try {
     const status = await api("/api/priority-news/choose", {
       method: "POST",
@@ -956,7 +959,7 @@ async function choosePriorityNewsFile() {
     if (status.canceled) {
       els.parseStatus.textContent = status.configured
         ? `Priority News List remains active: ${status.fileName}.`
-        : "Priority News List location was not selected.";
+        : "Priority News List location was not changed.";
       showPriorityNewsStatus(status);
       return;
     }

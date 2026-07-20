@@ -36,7 +36,7 @@ The portable launcher starts at port `4862`. If that port is already busy on a u
 
 1. Copy rows from Excel.
 2. Paste into the Excel paste box.
-3. Optionally click Priority News List and choose where to save this session's Word file.
+3. The Priority News List is automatically set to a `Priority News List` folder beside the app. Click its button only if you want to change the Word-file location.
 4. Use Add empty list when you want to start with one blank news section.
 5. Check generated news sections.
 6. Paste missing source logos into the logo boxes.
@@ -47,7 +47,7 @@ The portable launcher starts at port `4862`. If that port is already busy on a u
 
 ## Priority News List
 
-The Priority News List button creates a Word `.docx` at a location chosen by the user. The selected file and its accumulated entries remain active until Print News Studio is closed. Every item successfully saved by Render PNG List is added as:
+The Priority News List automatically uses `Priority News List\Priority News List YYYY-MM-DD.docx` beside the app, with its full active path shown beside the button. Click the button only to choose a different location. The selected file and its accumulated entries remain active until Print News Studio is closed. Every item successfully saved by Render PNG List is added as:
 
 ```text
 #202002 Iran military announces halt to operation against Israel (The Straits Times)

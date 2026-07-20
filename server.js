@@ -231,8 +231,10 @@ function chooseFolderInWindows(startFolder) {
 }
 
 function priorityNewsDefaultPath() {
-  const date = new Date().toISOString().slice(0, 10);
-  return path.join(currentExportFolder(), `Priority News List ${date}.docx`);
+  const now = new Date();
+  const date = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 10);
+  const priorityNewsFolder = path.join(ROOT, "Priority News List");
+  return path.join(priorityNewsFolder, `Priority News List ${date}.docx`);
 }
 
 function choosePriorityNewsFileInWindows(startPath) {
@@ -270,6 +272,8 @@ function choosePriorityNewsFileInWindows(startPath) {
     });
   });
 }
+
+priorityNewsSession.filePath = priorityNewsDefaultPath();
 
 function compareVersions(a, b) {
   const left = String(a || "0").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
@@ -1340,6 +1344,7 @@ module.exports = {
   createServer,
   normalizePriorityNewsEntry,
   priorityNewsDocumentXml,
+  priorityNewsDefaultPath,
   priorityNewsStatus,
   prioritySourceName,
   writePriorityNewsDocument
